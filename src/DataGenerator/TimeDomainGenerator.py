@@ -1,9 +1,23 @@
+"""
+This file is used to generate fault signal in time domain, reference to the following paper:
+@article{buzzoni2020tool,
+  title={A tool for validating and benchmarking signal processing techniques applied to machine diagnosis},
+  author={Buzzoni, Marco and D’Elia, Gianluca and Cocconcelli, Marco},
+  journal={Mechanical Systems and Signal Processing},
+  volume={139},
+  pages={106618},
+  year={2020},
+  publisher={Elsevier}
+}
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 
 
-def fault_generator(frequency_nature: float, frequency_fault: float, damping_ratio: float, slipping_factor: float, time: float, frequency_sampling: float, SNR:float):
+def fault_generator(frequency_nature: float, frequency_fault: float, damping_ratio: float, slipping_factor: float,
+                    time: float, frequency_sampling: float, SNR: float):
     """
     Generate a fault signal
     :param slipping_factor:
@@ -42,6 +56,7 @@ def fault_generator(frequency_nature: float, frequency_fault: float, damping_rat
     signal_generated = add_noise(signal_fault, SNR)
     return (signal_generated)
 
+
 def add_noise(signal, SNR):
     '''
     Add noise to signal
@@ -54,6 +69,7 @@ def add_noise(signal, SNR):
     noise = np.random.normal(0, np.sqrt(noise_power), len(signal))
     return signal + noise
 
+
 def min_max_normalize(signal):
     """
     Normalize signal to [-1, 1]
@@ -64,12 +80,12 @@ def min_max_normalize(signal):
 
 
 def frequency_spectrum(signal, frequency_sampling):
-    '''
+    """
     Generate frequency spectrum of a signal
     :param signal:
     :param frequency_sampling:
     :return:
-    '''
+    """
     length_signal = len(signal)
     frequency = np.fft.fftfreq(length_signal, 1 / frequency_sampling)
     spectrum = np.fft.fft(signal)
@@ -89,12 +105,11 @@ if '__main__' == __name__:
     slipping_factor = args.slipping_factor
     SNR = args.SNR
 
-    signal_fault_ = fault_generator(frequency_center, frequency_fault, damping_ratio, slipping_factor, time, frequency_sampling,SNR)
+    signal_fault_ = fault_generator(frequency_center, frequency_fault, damping_ratio, slipping_factor, time,
+                                    frequency_sampling, SNR)
     plt.plot(signal_fault_[0:1000])
     plt.show()
     frequency, spectrum = frequency_spectrum(signal_fault_, frequency_sampling)
     plt.scatter(frequency_center, 1000, marker='+', color='red', s=50)
     plt.plot(frequency[0:10000], spectrum[0:10000])
     plt.show()
-
-
