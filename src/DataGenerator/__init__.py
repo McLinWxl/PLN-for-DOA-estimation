@@ -1,10 +1,17 @@
-class Args:
-    def args_data_generator(self):
-        frequency_center = 4000
-        frequency_fault = 400
-        damping_ratio = 0.1
-        time = 10
-        frequency_sampling = 25600
+import argparse
 
-    # def
+
+def args_data_generator():
+    ARGS = argparse.Namespace(
+        frequency_center=5000,
+        frequency_fault=400,
+        damping_ratio=0.1,
+        time=1,
+        frequency_sampling=51200,
+        slipping_factor=0.01,
+        SNR=10
+    )
+    return ARGS
+
+
 
