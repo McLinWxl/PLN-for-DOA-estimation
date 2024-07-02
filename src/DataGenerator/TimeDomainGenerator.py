@@ -14,21 +14,31 @@ This file is used to generate fault signal in time domain, reference to the foll
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+from __init__ import args_data_generator
+
+args = args_data_generator()
 
 
-def fault_generator(frequency_nature: float, frequency_fault: float, damping_ratio: float, slipping_factor: float,
-                    time: float, frequency_sampling: float, SNR: float):
+def fault_generator():
     """
-    Generate a fault signal
-    :param slipping_factor:
-    :param frequency_nature: aka. center frequency
-    :param frequency_fault: aka. offset frequency
-    :param damping_ratio:
-    :param time:
-    :param frequency_sampling:
-    :return:
+    Generate fault signal in time domain
     """
-    omega_n = 2 * np.pi * frequency_nature
+    print("#" * 30)
+    print("Generating impulsive signal...")
+    print(f"Frequency center (Hz): {args.frequency_center}")
+    print(f"Frequency fault (Hz): {args.frequency_fault}")
+    print(f"Damping ratio: {args.damping_ratio}")
+    print(f"Slipping factor: {args.slipping_factor}")
+    print(f"Frequency sampling (Hz): {args.frequency_sampling}")
+    print(f"Time (Seconds): {args.time}")
+    print("#" * 30)
+
+    omega_n = 2 * np.pi * args.frequency_center
+    damping_ratio = args.damping_ratio
+    slipping_factor = args.slipping_factor
+    frequency_sampling = args.frequency_sampling
+    time = args.time
+    frequency_fault = args.frequency_fault
     omega_d = omega_n * np.sqrt(1 - damping_ratio ** 2)
 
     # Generate impulse response function
@@ -46,28 +56,15 @@ def fault_generator(frequency_nature: float, frequency_fault: float, damping_rat
     impulsive_signal = np.zeros(int(time * frequency_sampling))
     start = 0
     while start < time * frequency_sampling:
-        impulsive_signal[start] = 1
+        impulsive_signal[start] = np.random.uniform(0.95, 1.05)
         start += int((frequency_sampling / frequency_fault) * (1 + np.random.normal() * slipping_factor))
     # plt.plot(impulsive_signal[0:1000])
     # plt.show()
     # fftfilt
     signal_fault = np.convolve(impulsive_signal / frequency_sampling, response_function, mode='full')
-    signal_fault = min_max_normalize(signal_fault[0:int(time * frequency_sampling)])
-    signal_generated = add_noise(signal_fault, SNR)
-    return (signal_generated)
-
-
-def add_noise(signal, SNR):
-    '''
-    Add noise to signal
-    :param signal:
-    :param SNR:
-    :return:
-    '''
-    signal_power = np.sum(signal ** 2) / len(signal)
-    noise_power = signal_power / (10 ** (SNR / 10))
-    noise = np.random.normal(0, np.sqrt(noise_power), len(signal))
-    return signal + noise
+    signal_fault = min_max_normalize((signal_fault[0:int(time * frequency_sampling)]))
+    print("Impulsive signal generated.")
+    return signal_fault
 
 
 def min_max_normalize(signal):
@@ -79,13 +76,14 @@ def min_max_normalize(signal):
     return 2 * (signal - np.min(signal)) / (np.max(signal) - np.min(signal)) - 1
 
 
-def frequency_spectrum(signal, frequency_sampling):
+def frequency_spectrum(signal):
     """
     Generate frequency spectrum of a signal
     :param signal:
     :param frequency_sampling:
     :return:
     """
+    frequency_sampling = args.frequency_sampling
     length_signal = len(signal)
     frequency = np.fft.fftfreq(length_signal, 1 / frequency_sampling)
     spectrum = np.fft.fft(signal)
@@ -97,19 +95,11 @@ if '__main__' == __name__:
     from __init__ import args_data_generator
 
     args = args_data_generator()
-    frequency_center = args.frequency_center
-    frequency_fault = args.frequency_fault
-    damping_ratio = args.damping_ratio
-    time = args.time
-    frequency_sampling = args.frequency_sampling
-    slipping_factor = args.slipping_factor
-    SNR = args.SNR
 
-    signal_fault_ = fault_generator(frequency_center, frequency_fault, damping_ratio, slipping_factor, time,
-                                    frequency_sampling, SNR)
+    signal_fault_ = fault_generator()
     plt.plot(signal_fault_[0:1000])
     plt.show()
-    frequency, spectrum = frequency_spectrum(signal_fault_, frequency_sampling)
-    plt.scatter(frequency_center, 1000, marker='+', color='red', s=50)
-    plt.plot(frequency[0:10000], spectrum[0:10000])
+    frequency, spectrum = frequency_spectrum(signal_fault_)
+    plt.scatter(args.frequency_center, 1000, marker='+', color='red', s=50)
+    plt.plot(frequency, spectrum)
     plt.show()
