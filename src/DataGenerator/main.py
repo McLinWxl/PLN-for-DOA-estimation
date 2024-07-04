@@ -6,14 +6,14 @@ import torch.utils.data
 from FrequencyDomainExtractor import snapshot_exactor
 from TimeDomainGenerator import fault_generator
 from __init__ import args_data_generator
+from rich.progress import track
 
-args = args_data_generator()
 
 
 class DatasetGeneration_sample(torch.utils.data.Dataset):
-    def __init__(self):
-        signal = fault_generator()
-        data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal)
+    def __init__(self, args_):
+        signal = fault_generator(args_)
+        data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal, args_)
 
         # paras = {
         #     'frequency_center': args.frequency_center,
@@ -21,57 +21,77 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         #     'num_bands': args.search_numbers,
         # }
 
-        narrow_band = paras["frequency_fault"]
-        data_frequency = np.zeros((args.search_numbers, 1))
-
-        for i in range(args.search_numbers):
-            data_frequency[i] = args.frequency_center + (i - args.search_numbers // 2) * narrow_band
+        # a_frequency[i] = args.frequency_center + (i - args.search_numbers // 2) * narrow_band
 
         self.data_samples = torch.from_numpy(data_samples_)
-        self.data_frequency = torch.from_numpy(data_frequency)
+        # self.data_frequency = torch.from_numpy(data_frequency)
         self.label_theta = torch.from_numpy(label_theta_)
         self.label_SNR = torch.from_numpy(label_SNR_)
+        self.paras = paras
 
     def __getitem__(self, index):
-        return self.data_samples[index], self.data_frequency, self.label_theta[index], self.label_SNR[index]
+        return self.data_samples[index], self.paras, self.label_theta[index], self.label_SNR[index]
 
     def __len__(self):
         return len(self.data_samples)
 
-# class Dataset_Train(torch.utils.data.Dataset):
-#     def __init__(self):
-#         data_samples_ = torch.zeros((args.samples_repeat*args.
-#         for _ in args.samples_repeat:
-
+def dataset_train(args):
+    center_sets = [2000, 4000, 6000]
+    fault_sets = [50, 200, 500]
+    spacing_sets = [0.03, 0.06, 0.09]
+    # center_sets = [6000]
+    # fault_sets = [50]
+    # spacing_sets = [0.03]
+    dataset_all = DatasetGeneration_sample(args)
+    for center in track(center_sets, description="Generating dataset"):
+        for fault in fault_sets:
+            for spacing in spacing_sets:
+                args.frequency_center = center
+                args.frequency_fault = fault
+                args.antenna_distance = spacing
+                for _ in range(args.samples_repeat):
+                    dataset = DatasetGeneration_sample(args)
+                    dataset_all = dataset_all + dataset
+    return dataset_all
 
 
 if '__main__' == __name__:
+    args = args_data_generator()
 
-    dataset = DatasetGeneration_sample()
-    print(f"Dataset length: {len(dataset)}")
-    # Save dataset
-    torch.save(dataset, '../../data/data2train.pt')
-    # Load dataset
+    # dataset = dataset_train(args)
+    # print(f"Dataset length: {len(dataset)}")
+    # # Save dataset
+    # torch.save(dataset, '../../data/data2train.pt')
+    # # Load dataset
 
     dataset_ld = torch.load('../../data/data2train.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
-    data_samples, data_frequency, label_theta, label_SNR = dataset_ld[1]
+    data_samples, paras, label_theta, label_SNR = dataset_ld[60]
+
+    spacing_sample = paras['antenna_distance']
+    fre_center = paras['frequency_center']
+    fre_fault = paras['frequency_fault']
+
+    print(f"Antenna distance: {spacing_sample}")
+    print(f"Center frequency: {fre_center}")
+    print(f"Fault frequency: {fre_fault}")
+    print(f"Ground truth: {label_theta}")
+    print(f"SNR: {label_SNR}")
 
     covariance_matrix_samples = torch.matmul(data_samples, data_samples.conj().transpose(1, 2)) / args.num_snapshots
     plt.imshow(np.abs(covariance_matrix_samples[0].numpy()))
     plt.show()
 
-    import scipy.linalg
     # Apply wideband MUSIC algorithm
-    def MUSIC(R, num_sources, num_sensors, frequency):
+    def MUSIC(R, num_sources, num_sensors, frequency, spacing):
         """
         :param CovarianceMatrix
         :return:
         """
         CovarianceMatrix = np.array(R)
-        frequency = np.array(frequency)[0]
+        frequency = np.array(frequency)
         w, V = np.linalg.eig(CovarianceMatrix)
         w_index_order = np.argsort(w)
         V_noise = V[:, w_index_order[0:-num_sources]]
@@ -82,7 +102,7 @@ if '__main__' == __name__:
         for doa_index in range(len(doa_search)):
             # a = np.exp(
             #     1j * np.pi * np.arange(num_snesnors)[:, np.newaxis] * np.sin(np.deg2rad(doa_search[doa_index])))
-            a = np.exp(1j * 2 * np.pi * frequency * 0.034 * np.arange(num_sensors)[:, np.newaxis] * np.sin(np.deg2rad(doa_search[doa_index])) / 340)
+            a = np.exp(1j * 2 * np.pi * frequency * spacing * np.arange(num_sensors)[:, np.newaxis] * np.sin(np.deg2rad(doa_search[doa_index])) / 340)
             p_music[doa_index] = np.abs(1 / np.matmul(np.matmul(np.matrix.getH(a), noise_subspace), a).reshape(-1)[0])
         p_music = p_music / np.max(p_music)
         p_music = 10 * np.log10(p_music)
@@ -93,7 +113,8 @@ if '__main__' == __name__:
 
     p_all = np.zeros((9, 121))
     for i in range(p_all.shape[0]):
-        p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, data_frequency[i]).reshape(-1)
+        frequency_sample = fre_center + (i - args.search_numbers // 2) * fre_fault
+        p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
     p_ave = np.mean(p_all, axis=0)
     thete = np.linspace(-60, 60, 121)
 

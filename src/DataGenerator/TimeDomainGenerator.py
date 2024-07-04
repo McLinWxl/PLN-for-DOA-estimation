@@ -16,22 +16,22 @@ import numpy as np
 import scipy
 from __init__ import args_data_generator
 
-args = args_data_generator()
+# args = args_data_generator()
 
 
-def fault_generator():
+def fault_generator(args):
     """
     Generate fault signal in time domain
     """
-    print("#" * 30)
+    # print("#" * 30)
     print("Generating impulsive signal...")
-    print(f"Frequency center (Hz): {args.frequency_center}")
-    print(f"Frequency fault (Hz): {args.frequency_fault}")
-    print(f"Damping ratio: {args.damping_ratio}")
-    print(f"Slipping factor: {args.slipping_factor}")
-    print(f"Frequency sampling (Hz): {args.frequency_sampling}")
-    print(f"Time (Seconds): {args.time}")
-    print("#" * 30)
+    # print(f"Frequency center (Hz): {args.frequency_center}")
+    # print(f"Frequency fault (Hz): {args.frequency_fault}")
+    # print(f"Damping ratio: {args.damping_ratio}")
+    # print(f"Slipping factor: {args.slipping_factor}")
+    # print(f"Frequency sampling (Hz): {args.frequency_sampling}")
+    # print(f"Time (Seconds): {args.time}")
+    # print("#" * 30)
 
     omega_n = 2 * np.pi * args.frequency_center
     damping_ratio = args.damping_ratio
@@ -63,7 +63,7 @@ def fault_generator():
     # fftfilt
     signal_fault = np.convolve(impulsive_signal / frequency_sampling, response_function, mode='full')
     signal_fault = min_max_normalize((signal_fault[0:int(time * frequency_sampling)]))
-    print("Impulsive signal generated.")
+    # print("Impulsive signal generated.")
     return signal_fault
 
 
@@ -76,7 +76,7 @@ def min_max_normalize(signal):
     return 2 * (signal - np.min(signal)) / (np.max(signal) - np.min(signal)) - 1
 
 
-def frequency_spectrum(signal):
+def frequency_spectrum(signal, args):
     """
     Generate frequency spectrum of a signal
     :param signal:
@@ -95,11 +95,27 @@ if '__main__' == __name__:
     from __init__ import args_data_generator
 
     args = args_data_generator()
-
+    plt.style.use(['science', 'ieee', 'grid'])
+    plt.figure(dpi=800)
     signal_fault_ = fault_generator()
-    plt.plot(signal_fault_[0:1000])
+    x_axis = np.linspace(0, 500 / args.frequency_sampling, 500)
+    plt.plot(x_axis, signal_fault_[0:500], label='Impulsive signal')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+    plt.title('Impulsive signal')
+    plt.legend(fontsize=8)
+    plt.savefig('../../Test/Figures/ImpulsiveSignal.pdf')
     plt.show()
-    frequency, spectrum = frequency_spectrum(signal_fault_)
-    plt.scatter(args.frequency_center, 1000, marker='+', color='red', s=50)
-    plt.plot(frequency, spectrum)
+
+    plt.figure(dpi=800)
+    frequency, spectrum = frequency_spectrum(signal_fault_, args)
+    plt.plot(frequency, spectrum, label='Frequency spectrum')
+    plt.axvline(x=args.frequency_center, color='red', linestyle='--', label='Center frequency')
+    # plt.scatter(args.frequency_center, 1000, marker='+', color='red', s=50)
+    plt.xlim(0, 8000)
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude')
+    plt.title('Frequency spectrum of impulsive signal')
+    plt.legend(fontsize=8)
+    plt.savefig('../../Test/Figures/FrequencySpectrum.pdf')
     plt.show()

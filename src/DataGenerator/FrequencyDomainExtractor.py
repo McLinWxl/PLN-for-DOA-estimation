@@ -15,24 +15,26 @@ import matplotlib.pyplot as plt
 from numpy import ndarray, dtype
 from __init__ import args_data_generator
 
-args = args_data_generator()
+# args = args_data_generator()
 from TimeDomainGenerator import min_max_normalize
 
 
-def add_noise(signal, SNR):
+def add_noise(signal:np.ndarray, SNR):
     """
     Add noise to signal
     :param signal:
     :param SNR:
     :return:
     """
-    signal_power = np.sum(signal ** 2) / len(signal)
+    signal_power = np.sum(signal ** 2) / signal.size
     noise_power = signal_power / (10 ** (SNR / 10))
-    noise = np.random.normal(0, np.sqrt(noise_power), len(signal))
+    noise = np.random.normal(0, np.sqrt(noise_power), signal.shape)
     return signal + noise
 
 
-def time_delay(signal, time_delay: float) -> np.ndarray:
+
+
+def time_delay(signal, time_delay: float, args) -> np.ndarray:
     """
     Apply time delay to the signal
     :param signal: the signal to be delayed
@@ -54,7 +56,7 @@ def time_delay(signal, time_delay: float) -> np.ndarray:
     return signal_delayed
 
 
-def delay_time_calculator(antenna_distance: float, theta: float) -> float:
+def delay_time_calculator(antenna_distance: float, theta: float, args) -> float:
     """
     Calculate the time delay based on the antenna array configuration
     :param antenna_distance: the distance between two adjacent antennas
@@ -67,7 +69,7 @@ def delay_time_calculator(antenna_distance: float, theta: float) -> float:
     return antenna_distance * np.sin(theta_) / speed_of_sound
 
 
-def signal_slicer(signal: np.ndarray) -> np.ndarray:
+def signal_slicer(signal: np.ndarray, args) -> np.ndarray:
     """
     Slice the signal into multiple segments
     :param signal: the signal to be sliced
@@ -85,7 +87,7 @@ def signal_slicer(signal: np.ndarray) -> np.ndarray:
     return signal_sliced
 
 
-def fft_transform(signal: np.ndarray, max_fre=10000):
+def fft_transform(signal: np.ndarray, args, max_fre=10000):
     """
     Perform FFT on the signal
     :param signal: the signal to be transformed
@@ -102,7 +104,7 @@ def fft_transform(signal: np.ndarray, max_fre=10000):
     return frequency_out, spectrum_out
 
 
-def find_largest_frequency_components(frequency_fft, signal_fft: np.ndarray, frequency_center, frequency_band) -> \
+def find_largest_frequency_components(frequency_fft, signal_fft: np.ndarray, frequency_center, frequency_band, args) -> \
         tuple[Any, ndarray[Any, Any]]:
     """
     Find the N-largest frequency components near the center frequency
@@ -118,30 +120,37 @@ def find_largest_frequency_components(frequency_fft, signal_fft: np.ndarray, fre
         (frequency_fft > frequency_center - frequency_band) & (frequency_fft < frequency_center + frequency_band))]
     frequency_fft_ = frequency_fft[np.where(
         (frequency_fft > frequency_center - frequency_band) & (frequency_fft < frequency_center + frequency_band))]
-    frequency_index = scipy.signal.find_peaks(np.abs(signal_fft_), distance=args.frequency_fault // 10)[0]
-    frequency_index_ = frequency_index[np.argsort(signal_fft_[frequency_index])[-n:]]
-    frequency_index_ = frequency_index_[::-1]
+    frequency_index = scipy.signal.find_peaks(np.abs(signal_fft_))[0]
+    frequency_index__ = frequency_index[np.argsort(signal_fft_[frequency_index])[-n:]]
+    frequency_index_ = frequency_index__[::-1]
+    if signal_fft_[frequency_index_].shape[0] == 0:
+        if signal_fft_[0] > signal_fft_[-1]:
+            frequency_index_ = [0]
+        else:
+            frequency_index_ = [len(signal_fft_) - 1]
     return frequency_fft_[frequency_index_], signal_fft_[frequency_index_]
 
 
-def snapshot_exactor(signal):
+def snapshot_exactor(signal, args):
     """
     main function:
 
     :return: The concatenated frequency domain snapshots and the target frequency components
     """
-    print("Generating frequency domain snapshots...")
-    print(f"Theta range: {args.theta_min} ~ {args.theta_max}")
-    print(f"SNR range: {args.SNR_min} ~ {args.SNR_max}")
-    print(f"Number of samples: {args.samples}")
-    print(f"Number of snapshots: {args.num_snapshots}")
-    # print(f"Available samples
-    print(f"Antenna number: {args.antenna_num}")
-    print("#" * 30)
+    # print("Generating frequency domain snapshots...")
+    # print(f"Theta range: {args.theta_min} ~ {args.theta_max}")
+    # print(f"SNR range: {args.SNR_min} ~ {args.SNR_max}")
+    # print(f"Number of samples: {args.samples}")
+    # print(f"Number of snapshots: {args.num_snapshots}")
+    # # print(f"Available samples
+    # print(f"Antenna number: {args.antenna_num}")
+    # print("#" * 30)
     theta_min = args.theta_min
     theta_max = args.theta_max
-    SNR_min = args.SNR_min
-    SNR_max = args.SNR_max
+    SNR_source_min = args.SNR_source_min
+    SNR_source_max = args.SNR_source_max
+    SNR_env_min = args.SNR_env_min
+    SNR_env_max = args.SNR_env_max
     num_samples = args.samples
     num_snapshots = args.num_snapshots
     narrow_band = args.frequency_fault
@@ -151,20 +160,28 @@ def snapshot_exactor(signal):
     for i in range(args.search_numbers):
         data_frequency[i] = args.frequency_center + (i - args.search_numbers // 2) * narrow_band
     label_theta = np.zeros((num_samples, 1))
-    label_SNR = np.zeros((num_samples, 1))
-    for sample in track(range(num_samples), description="Generating frequency domain snapshots..."):
+    label_SNR = np.zeros((num_samples, 2))
+    for sample in range(num_samples):
         # generate the SNR
-        SNR = np.random.uniform(SNR_min, SNR_max)
-        signal_noised = add_noise(signal, SNR)
+        SNR_source = np.random.uniform(SNR_source_min, SNR_source_max)
+
+        signal_noised = add_noise(signal, SNR_source)
         signal_noised = min_max_normalize(signal_noised)
         theta = np.random.randint(theta_min, theta_max)
-        time_dalays = [delay_time_calculator(args.antenna_distance * i, theta) for i in range(args.antenna_num)]
-        signals_delayed = [time_delay(signal_noised, time_dalay) for time_dalay in time_dalays]
+        time_dalays = [delay_time_calculator(args.antenna_distance * i, theta, args) for i in range(args.antenna_num)]
+        signals_delayed = [time_delay(signal_noised, time_dalay, args) for time_dalay in time_dalays]
+
+        SNR_env = np.random.uniform(SNR_env_min, SNR_env_max)
+
         signals_delayed = np.array(signals_delayed).reshape(args.antenna_num, -1)
+        signals_delayed_noised = add_noise(signals_delayed, SNR_env)
+
+        # normalize the signal to [-1, 1]
+        signals_delayed = (signals_delayed_noised - np.min(signals_delayed_noised)) / (np.max(signals_delayed_noised) - np.min(signals_delayed_noised))
 
         # slice the original signal into multiple segments
         for antenna in range(args.antenna_num):
-            signal_sliced = [signal_slicer(signals_delayed[i]) for i in range(args.antenna_num)]
+            signal_sliced = [signal_slicer(signals_delayed[i], args) for i in range(args.antenna_num)]
         signal_sliced = np.array(signal_sliced).reshape(args.antenna_num, -1, args.snapshot_length)
         signal_sliced = signal_sliced.transpose((1, 0, 2))
         assert signal_sliced.shape[0] >= num_snapshots, "Collected time is not enough to generate enough snapshots."
@@ -175,24 +192,27 @@ def snapshot_exactor(signal):
             (args.search_numbers, args.antenna_num, num_snapshots))
         for antenna in range(args.antenna_num):
             for snapshot in range(num_snapshots):
-                frequency_fft, signals_fft = fft_transform(signal_sliced[snapshot, antenna])
+                frequency_fft, signals_fft = fft_transform(signal_sliced[snapshot, antenna], args)
                 # plt.plot(frequency_fft, np.abs(signals_fft))
                 # plt.show()
+
                 for narrow in range(args.search_numbers):
                     frequency_narrow_center = args.frequency_center + (narrow - args.search_numbers // 2) * narrow_band
                     # Find the narrowed frequency range and its amplitude
                     n_largest_frequency, n_largest_amp = find_largest_frequency_components(frequency_fft, signals_fft,
                                                                                            frequency_narrow_center,
-                                                                                           narrow_band)
+                                                                                           narrow_band,
+                                                                                           args)
                     snapshot_sample[narrow, antenna, snapshot] = n_largest_amp[0]
                     # ...
         data_samples[sample] = snapshot_sample
         label_theta[sample] = theta
-        label_SNR[sample] = SNR
+        label_SNR[sample] = [SNR_env, SNR_source]
         paras = {
             'frequency_center': args.frequency_center,
             'frequency_fault': args.frequency_fault,
             'num_bands': args.search_numbers,
+            'antenna_distance': args.antenna_distance,
         }
     return data_samples, label_theta, label_SNR, paras
 
@@ -203,7 +223,7 @@ if __name__ == '__main__':
 
     args = args_data_generator()
     signal = fault_generator()
-    data_samples_, data_frequency_, label_theta_, label_SNR_ = snapshot_exactor(signal)
+    data_samples_, data_frequency_, label_theta_, label_SNR_ = snapshot_exactor(signal, args)
     ...
 
     # time_dalays = [delay_time_calculator(args.antenna_distance * i, 30) for i in range(args.anrenna_num)]
