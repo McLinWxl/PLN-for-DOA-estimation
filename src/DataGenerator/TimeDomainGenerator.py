@@ -36,7 +36,7 @@ def fault_generator(args):
     omega_n = 2 * np.pi * args.frequency_center
     damping_ratio = args.damping_ratio
     slipping_factor = args.slipping_factor
-    frequency_sampling = args.frequency_sampling
+    frequency_sampling = args.frequency_sampling * args.amp_sample
     time = args.time
     frequency_fault = args.frequency_fault
     omega_d = omega_n * np.sqrt(1 - damping_ratio ** 2)
@@ -54,7 +54,7 @@ def fault_generator(args):
 
     # Generate periodic modulation
     impulsive_signal = np.zeros(int(time * frequency_sampling))
-    start = 0
+    start = int((frequency_sampling / frequency_fault) / 2)
     while start < time * frequency_sampling:
         impulsive_signal[start] = np.random.uniform(0.95, 1.05)
         start += int((frequency_sampling / frequency_fault) * (1 + np.random.normal() * slipping_factor))
@@ -97,12 +97,14 @@ if '__main__' == __name__:
     args = args_data_generator()
     plt.style.use(['science', 'ieee', 'grid'])
     plt.figure(dpi=800)
-    signal_fault_ = fault_generator()
-    x_axis = np.linspace(0, 500 / args.frequency_sampling, 500)
-    plt.plot(x_axis, signal_fault_[0:500], label='Impulsive signal')
+    signal_fault_ = fault_generator(args)
+    x_axis = np.linspace(0, 1500 / args.frequency_sampling, 1500)
+    plt.plot(x_axis, signal_fault_[0:1500], label='Impulsive signal')
     plt.xlabel('Time (s)')
     plt.ylabel('Amplitude')
-    plt.title('Impulsive signal')
+    plt.title(f'Impulsive signal at: \n '
+              f'1. Center frequency: {args.frequency_center} Hz, \n '
+              f'2. Fault frequency: {args.frequency_fault} Hz, \n ')
     plt.legend(fontsize=8)
     plt.savefig('../../Test/Figures/ImpulsiveSignal.pdf')
     plt.show()
@@ -112,10 +114,12 @@ if '__main__' == __name__:
     plt.plot(frequency, spectrum, label='Frequency spectrum')
     plt.axvline(x=args.frequency_center, color='red', linestyle='--', label='Center frequency')
     # plt.scatter(args.frequency_center, 1000, marker='+', color='red', s=50)
-    plt.xlim(0, 8000)
+    plt.xlim(0, 12000)
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Amplitude')
-    plt.title('Frequency spectrum of impulsive signal')
+    plt.title(f'Frequency spectrum of impulsive signal at: \n '
+              f'1. Center frequency: {args.frequency_center} Hz, \n '
+              f'2. Fault frequency: {args.frequency_fault} Hz, \n ')
     plt.legend(fontsize=8)
     plt.savefig('../../Test/Figures/FrequencySpectrum.pdf')
     plt.show()

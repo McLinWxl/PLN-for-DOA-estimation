@@ -36,11 +36,11 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         return len(self.data_samples)
 
 def dataset_train(args):
-    center_sets = [2000, 4000, 6000]
-    fault_sets = [50, 200, 500]
-    spacing_sets = [0.03, 0.06, 0.09]
-    # center_sets = [6000]
-    # fault_sets = [50]
+    center_sets = [8000, 4000, 2000]
+    fault_sets = [150, 300, 600]
+    spacing_sets = [0.02, 0.04, 0.08]
+    # center_sets = [5000, 4000, 3000]
+    # fault_sets = [50, 150, 300]
     # spacing_sets = [0.03]
     dataset_all = DatasetGeneration_sample(args)
     for center in track(center_sets, description="Generating dataset"):
@@ -56,23 +56,29 @@ def dataset_train(args):
 
 
 if '__main__' == __name__:
+    # import scipy.linalg as la
     args = args_data_generator()
 
+    #
     # dataset = dataset_train(args)
     # print(f"Dataset length: {len(dataset)}")
     # # Save dataset
     # torch.save(dataset, '../../data/data2train.pt')
-    # # Load dataset
+    # Load dataset
 
     dataset_ld = torch.load('../../data/data2train.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
-    data_samples, paras, label_theta, label_SNR = dataset_ld[60]
+    data_samples, paras, label_theta, label_SNR = dataset_ld[2723]
 
     spacing_sample = paras['antenna_distance']
     fre_center = paras['frequency_center']
     fre_fault = paras['frequency_fault']
+
+    args.antenna_distance = spacing_sample
+    args.frequency_center = fre_center
+    args.frequency_fault = fre_fault
 
     print(f"Antenna distance: {spacing_sample}")
     print(f"Center frequency: {fre_center}")
@@ -111,10 +117,45 @@ if '__main__' == __name__:
         p_norm = (p_norm - np.min(p_norm)) / (np.max(p_norm) - np.min(p_norm))
         return p_norm
 
-    p_all = np.zeros((9, 121))
+    def SBL(raw_data, frequency, args, max_iteration=500, error_threshold=1e-3):
+        """
+        :param raw_data:
+        :param max_iteration:
+        :param error_threshold:
+        :return:
+        """
+        raw_data = np.array(raw_data)
+        doa_search = np.linspace(-60, 60, 121)
+        A = np.exp(1j * 2 * np.pi * frequency * args.antenna_distance * np.arange(args.antenna_num)[:, np.newaxis] * np.sin(np.deg2rad(doa_search)) / args.speed_of_sound)
+        mu = A.T.conjugate() @ np.linalg.pinv(A @ A.T.conjugate()) @ raw_data
+        sigma2 = 0.1 * np.linalg.norm(raw_data, 'fro') ** 2 / (args.antenna_num * args.num_snapshots)
+        gamma = np.diag((mu @ mu.T.conjugate()).real) / args.num_snapshots
+        ItrIdx = 1
+        stop_iter = False
+        gamma0 = gamma
+        while not stop_iter and ItrIdx < max_iteration:
+            gamma0 = gamma
+            Q = sigma2 * np.eye(args.antenna_num) + np.dot(np.dot(A, np.diag(gamma)), A.T.conjugate())
+            Qinv = np.linalg.pinv(Q)
+            Sigma = np.diag(gamma) - np.dot(np.dot(np.dot(np.diag(gamma), A.T.conjugate()), Qinv),
+                                            np.dot(A, np.diag(gamma)))
+            mu = np.dot(np.dot(np.diag(gamma), A.T.conjugate()), np.dot(Qinv, raw_data))
+            sigma2 = ((np.linalg.norm(raw_data - np.dot(A, mu), 'fro') ** 2 + args.num_snapshots * np.trace(
+                np.dot(np.dot(A, Sigma), A.T.conjugate()))) /
+                      (args.antenna_num * args.num_snapshots)).real
+            mu_norm = np.diag(mu @ mu.T.conjugate()) / args.num_snapshots
+            gamma = np.abs(mu_norm + np.diag(Sigma))
+
+            if np.linalg.norm(gamma - gamma0) / np.linalg.norm(gamma) < error_threshold:
+                stop_iter = True
+            ItrIdx += 1
+        return gamma
+
+    p_all = np.zeros((args.search_numbers, 121))
     for i in range(p_all.shape[0]):
         frequency_sample = fre_center + (i - args.search_numbers // 2) * fre_fault
-        p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
+        # p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
+        p_all[i] = SBL(data_samples[i], frequency_sample, args).reshape(-1)
     p_ave = np.mean(p_all, axis=0)
     thete = np.linspace(-60, 60, 121)
 
@@ -126,8 +167,12 @@ if '__main__' == __name__:
     plt.axvline(x=label_theta[0], color='r', linestyle='--', label='Ground truth')
     plt.xlabel("DOA (°)")
     plt.ylabel("Amplitude")
-    plt.title("MUSIC Algorithm")
+    plt.title(f"SBL Algorithm for Impulsive Signal DOA Estimation at:  \n "
+              f"1. Center frequency: {fre_center} Hz,  \n "
+              f"2. Fault frequency: {fre_fault} Hz,  \n "
+              f"3. Antenna distance: {spacing_sample} meters, \n "
+              f"4. SNR of environment, SNR of source: {np.array(label_SNR)} dB")
     plt.legend(fontsize=8)
-    plt.savefig('../../Test/Figures/MUSIC.pdf')
+    plt.savefig('../../Test/Figures/SBL.pdf')
     plt.show()
 
