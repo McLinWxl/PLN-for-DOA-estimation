@@ -70,7 +70,7 @@ if '__main__' == __name__:
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
-    data_samples, paras, label_theta, label_SNR = dataset_ld[2723]
+    data_samples, paras, label_theta, label_SNR = dataset_ld[211]
 
     spacing_sample = paras['antenna_distance']
     fre_center = paras['frequency_center']
