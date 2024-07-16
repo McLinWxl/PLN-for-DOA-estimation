@@ -1,10 +1,16 @@
+#  Copyright (c) 2024. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+#  Morbi non lorem porttitor neque feugiat blandit. Ut vitae ipsum eget quam lacinia accumsan.
+#  Etiam sed turpis ac ipsum condimentum fringilla. Maecenas magna.
+#  Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
+#  Vestibulum commodo. Ut rhoncus gravida arcu.
+
 import argparse
 
 
-def args_data_generator():
+def args_doa():
     ARGS = argparse.Namespace(
-        frequency_center=5666,
-        frequency_fault=300,  # must less than frequency_center / 10
+        frequency_center=6000,
+        frequency_fault=500,  # must less than frequency_center / 10
         damping_ratio=0.1,
         time=9,  # 20
 
@@ -28,10 +34,20 @@ def args_data_generator():
         SNR_env_min=-10,
         SNR_env_max=0,
 
-        theta_min=-59,
-        theta_max=59,
+        theta_min=-60,
+        theta_max=60,
+        num_meshes=121,
 
         samples=50,  # different SNR and theta
         samples_repeat=2,  # different source waves
     )
     return ARGS
+
+def args_unfolding_doa():
+    ARGS = argparse.Namespace(
+        num_layers=30,
+        device='cpu',
+
+    )
+    return ARGS
+

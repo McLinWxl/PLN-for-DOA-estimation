@@ -87,7 +87,7 @@ def signal_slicer(signal: np.ndarray, args) -> np.ndarray:
     return signal_sliced
 
 
-def fft_transform(signal: np.ndarray, args, max_fre=10000):
+def fft_transform(signal: np.ndarray, args, max_fre=15000):
     """
     Perform FFT on the signal
     :param signal: the signal to be transformed

@@ -36,9 +36,9 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         return len(self.data_samples)
 
 def dataset_train(args):
-    center_sets = [8000, 4000, 2000]
-    fault_sets = [150, 300, 600]
-    spacing_sets = [0.02, 0.04, 0.08]
+    center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
+    fault_sets = [75, 150, 225, 300, 450, 600, 800]
+    spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
     # center_sets = [5000, 4000, 3000]
     # fault_sets = [50, 150, 300]
     # spacing_sets = [0.03]
@@ -60,13 +60,13 @@ if '__main__' == __name__:
     args = args_data_generator()
 
     #
-    # dataset = dataset_train(args)
-    # print(f"Dataset length: {len(dataset)}")
-    # # Save dataset
-    # torch.save(dataset, '../../data/data2train.pt')
+    dataset = dataset_train(args)
+    print(f"Dataset length: {len(dataset)}")
+    # Save dataset
+    torch.save(dataset, '../../data/data2test_-5.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2train.pt')
+    dataset_ld = torch.load('../../data/data2test_-5.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
@@ -154,8 +154,8 @@ if '__main__' == __name__:
     p_all = np.zeros((args.search_numbers, 121))
     for i in range(p_all.shape[0]):
         frequency_sample = fre_center + (i - args.search_numbers // 2) * fre_fault
-        # p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
-        p_all[i] = SBL(data_samples[i], frequency_sample, args).reshape(-1)
+        p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
+        # p_all[i] = SBL(data_samples[i], frequency_sample, args).reshape(-1)
     p_ave = np.mean(p_all, axis=0)
     thete = np.linspace(-60, 60, 121)
 
