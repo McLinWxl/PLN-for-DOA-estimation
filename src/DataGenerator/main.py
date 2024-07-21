@@ -27,25 +27,44 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         # self.data_frequency = torch.from_numpy(data_frequency)
         self.label_theta = torch.from_numpy(label_theta_)
         self.label_SNR = torch.from_numpy(label_SNR_)
-        self.paras = paras
+        # self.paras = paras
+
+        self.frequency_center = np.zeros_like(label_theta_) + paras['frequency_center']
+        self.frequency_fault = np.zeros_like(label_theta_) + paras['frequency_fault']
+        self.antenna_distance = np.zeros_like(label_theta_) + paras['antenna_distance']
 
     def __getitem__(self, index):
-        return self.data_samples[index], self.paras, self.label_theta[index], self.label_SNR[index]
+        return (self.data_samples[index],
+                self.frequency_center[index],
+                self.frequency_fault[index],
+                self.antenna_distance[index],
+                self.label_theta[index],
+                self.label_SNR[index])
 
     def __len__(self):
         return len(self.data_samples)
 
 def dataset_train(args):
-    center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
-    fault_sets = [75, 150, 225, 300, 450, 600, 800]
-    spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
+    center_sets = [8500, 7000, 5666, 5000, 4250, 4000, 3400, 3000, 2833]
+    fault_sets = [75, 150, 300, 600]
+    spacing_sets = [0.02, 0.03, 0.04, 0.05, 0.06]
+    # center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
+    # fault_sets = [75, 150, 225, 300, 450, 600, 800]
+    # spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
     # center_sets = [5000, 4000, 3000]
     # fault_sets = [50, 150, 300]
+    # spacing_sets = [0.03]
+    # center_sets = [5666]
+    # fault_sets = [150]
     # spacing_sets = [0.03]
     dataset_all = DatasetGeneration_sample(args)
     for center in track(center_sets, description="Generating dataset"):
         for fault in fault_sets:
             for spacing in spacing_sets:
+                if np.abs(center * spacing - 170) >= 25:
+                    continue
+                print(center, spacing, fault, center * spacing - 170)
+
                 args.frequency_center = center
                 args.frequency_fault = fault
                 args.antenna_distance = spacing
@@ -63,18 +82,14 @@ if '__main__' == __name__:
     dataset = dataset_train(args)
     print(f"Dataset length: {len(dataset)}")
     # Save dataset
-    torch.save(dataset, '../../data/data2test_-5.pt')
+    torch.save(dataset, '../../data/data2train_new.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2test_-5.pt')
+    dataset_ld = torch.load('../../data/data2train_new.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
-    data_samples, paras, label_theta, label_SNR = dataset_ld[211]
-
-    spacing_sample = paras['antenna_distance']
-    fre_center = paras['frequency_center']
-    fre_fault = paras['frequency_fault']
+    data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR = dataset_ld[211]
 
     args.antenna_distance = spacing_sample
     args.frequency_center = fre_center

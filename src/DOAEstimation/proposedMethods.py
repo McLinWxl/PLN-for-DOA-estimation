@@ -25,10 +25,48 @@ class proposedMethods(torch.nn.Module):
         self.num_layers = args_unfolding.num_layers
         self.device = args_unfolding.device
 
-        self.theta = torch.nn.Parameter(0.0001 * torch.ones(self.num_layers), requires_grad=True) # smaller
-        self.gamma = torch.nn.Parameter(0.0001 * torch.ones(self.num_layers), requires_grad=True)
-        self.leakly_relu = torch.nn.LeakyReLU()
+        # self.theta = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True) # smaller
+        self.gamma = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True)
+        self.leakly_relu = torch.nn.LeakyReLU(0.1)
         self.relu = torch.nn.ReLU()
+
+        self.conv1 = torch.nn.Conv2d(in_channels=9, out_channels=16, kernel_size=(3, 3), stride=1, padding='same')
+        self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=12, kernel_size=(3, 3), stride=1, padding='same')
+        self.conv3 = torch.nn.Conv2d(in_channels=12, out_channels=9, kernel_size=(3, 3), stride=1, padding='same')
+
+    def thresholding_module(self, x):
+        """
+        Apply thresholding to the input data
+        :param x: shape of (batch_size, search_numbers, num_grids, 1)
+        :return: shape of (batch_size, search_numbers, num_grids, 1)
+        """
+        x_shortcut = x
+        # x = self.leakly_relu(x)
+        x = self.conv1(x)
+        x = self.leakly_relu(x)
+        x = self.conv2(x)
+        x = self.leakly_relu(x)
+        x = self.conv3(x)
+        x = x_shortcut - x
+        return x
+
+    # def combination_module(self, x):
+    #     """
+    #     Combine the multi-channles to calculate a final output, using attention module
+    #     :param x: shape of (batch_size, search_numbers, num_grids, 1)
+    #     :return: shape of (batch_size, num_grids, 1)
+    #     """
+    #     x_shortcut = x
+    #     x = self.conv1(x)
+    #     x = self.leakly_relu(x)
+    #     x = self.conv2(x)
+    #     x = self.leakly_relu(x)
+    #     x = self.conv3(x)
+    #     x = x + torch.mean(x_shortcut, dim=1, keepdim=True)
+    #     x = x - torch.mean(x).item()
+    #     x = self.relu(x)
+    #     return x
+
         ...
     def forward(self, paras, covariance_vector):
         """
@@ -36,67 +74,78 @@ class proposedMethods(torch.nn.Module):
         :param covariance_vector: (batch_size, search_numbers, M2, 1) -> (1, 9, 64, 1)
         :return:
         """
+        num_batch = covariance_vector.shape[0]
         assert covariance_vector.shape[1] == self.args.search_numbers and covariance_vector.shape[2] == self.M2 and covariance_vector.shape[3] == 1
         # covariance_vector = covariance_vector / torch.linalg.matrix_norm(covariance_vector, ord=np.inf, keepdim=True)
         covariance_vector = covariance_vector.to(torch.complex64)
-        spacing_sample = paras['antenna_distance']
-        fre_center = paras['frequency_center']
-        fre_fault = paras['frequency_fault']
+        spacing_sample = paras.antenna_distance
+        fre_center = paras.frequency_center
+        fre_fault = paras.frequency_fault
 
         self.args.antenna_distance = spacing_sample
         self.args.frequency_center = fre_center
         self.args.frequency_fault = fre_fault
 
         # make high dim dictionary, shape: (search_numbers, M2, num_grids) -> (9, 64, 121)
-        narrow_band = int(args.frequency_center / 15)
-        dictionary_band = torch.zeros((self.args.search_numbers, self.M2, self.num_grids), dtype=torch.complex64, device=self.device)
-        for i in range(self.args.search_numbers):
-            fre_center_nb = self.args.frequency_center + (i - self.args.search_numbers // 2) * narrow_band
-            dictionary_band[i] = torch.from_numpy(cal_dictionary(fre_center_nb, self.args))
+        narrow_band = torch.Tensor([int(self.args.frequency_center[i] / 15) for i in range(len(self.args.frequency_center))]).to(self.device)
+        dictionary_band = torch.zeros((num_batch, self.args.search_numbers, self.M2, self.num_grids), dtype=torch.complex64, device=self.device)
+        for bat in range(num_batch):
+            for i in range(self.args.search_numbers):
+                fre_center_nb = self.args.frequency_center[bat] + (i - self.args.search_numbers // 2) * narrow_band
+                dictionary_band[bat, i] = torch.from_numpy(cal_dictionary(fre_center_nb[bat], self.args, bat))
 
         # Forward
-        result_init = torch.matmul(dictionary_band.conj().transpose(1, 2), covariance_vector).real.float()
+        result_init = torch.matmul(dictionary_band.conj().transpose(2, 3), covariance_vector).real.float()
+        # result_init = result_init / (torch.norm(result_init, dim=2) + 1e-20).reshape(-1)
+        result_init = torch.div(result_init, torch.norm(result_init, dim=2).reshape(result_init.shape[0], result_init.shape[1], 1, result_init.shape[3]) + 1e-20)
         result_init_all = torch.zeros(result_init.shape[0], self.args.search_numbers, self.num_layers, self.num_grids, 1).to(self.device)
 
         result = result_init
+        identity_matrix = (torch.eye(self.num_grids) + 1j * torch.zeros([self.num_grids, self.num_grids])).to(
+            self.device)
+
         for i in range(self.num_layers):
-            identity_matrix = (torch.eye(self.num_grids) + 1j * torch.zeros([self.num_grids, self.num_grids])).to(self.device)
-            # TODO: gamma is trainable.
-            Wt = identity_matrix - self.gamma[i] * torch.matmul(dictionary_band.conj().transpose(1, 2), dictionary_band)
-            We = self.gamma[i] * dictionary_band.conj().transpose(1, 2)
+            # TODO: gamma is trainable. It should be learned from the former layer.
+            Wt = identity_matrix - self.gamma * torch.matmul(dictionary_band.conj().transpose(2, 3), dictionary_band)
+            We = self.gamma * dictionary_band.conj().transpose(2, 3)
             s = torch.matmul(Wt, result + 1j * torch.zeros_like(result)) + torch.matmul(We, covariance_vector)
             s_abs = torch.abs(s)
             # TODO: theta is trainable, and relu can be replaced.
-            result = self.relu(s_abs - self.theta[i])
+            # TODO: Soft-threshold can be replaced a neural model.
+            # result = self.relu(s_abs - self.theta)
+            result = self.thresholding_module(s_abs)
             # result = result / (torch.norm(result, dim=1, keepdim=True) + 1e-20)
             result_init_all[:, :, i] = result
         # norm every channel of result to [0, 1]
-        # result = result / (torch.norm(result) + 1e-20)
-        result = torch.nn.functional.softmax(result, dim=2)
+        result = result / (torch.norm(result, dim=2) + 1e-20).reshape(result_init.shape[0], result_init.shape[1], 1, result_init.shape[3])
+        # result = torch.nn.functional.softmax(result, dim=2)
+        result_ave = torch.mean(result, dim=1, keepdim=True).to(torch.float32)
+        # result_ave = self.combination_module(result)
 
-
-
-        return result, result_init_all
+        return result, result_ave, result_init_all
 
 
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2train_2750_9channels.pt')
+    dataset_ld = torch.load('../../data/data2train_new.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=1, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=200, shuffle=True)
 
     model = proposedMethods()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0004)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # criterion = torch.nn.MSELoss()
     criterion = torch.nn.MSELoss()
 
-    epoch = 1
+
+
+    epoch = 5
 
     losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion, args=args)
     # save losses as csv file
     np.savetxt('../../Test/losses.csv', losses, delimiter=',')
 
     plt.style.use(['science', 'ieee', 'grid'])
-    plt.figure(dip=800)
+    plt.figure(dpi=800)
     plt.plot(losses)
     plt.xlabel('Batch')
     plt.ylabel('Loss')

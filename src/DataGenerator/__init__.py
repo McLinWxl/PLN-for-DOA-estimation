@@ -6,7 +6,7 @@ def args_data_generator():
         frequency_center=5666,
         frequency_fault=300,  # must less than frequency_center / 10
         damping_ratio=0.1,
-        time=9,  # 20
+        time=9,  # 9 -> 100
 
         amp_sample=20,
 
@@ -31,7 +31,7 @@ def args_data_generator():
         theta_min=-59,
         theta_max=59,
 
-        samples=50,  # different SNR and theta
-        samples_repeat=2,  # different source waves
+        samples=100,  # different SNR and theta
+        samples_repeat=3,  # different source waves
     )
     return ARGS

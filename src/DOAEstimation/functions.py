@@ -30,7 +30,12 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         # self.paras = paras
 
     def __getitem__(self, index):
-        return self.data_samples[index], self.paras, self.label_theta[index], self.label_SNR[index]
+        return (self.data_samples[index],
+                self.frequency_center[index],
+                self.frequency_fault[index],
+                self.antenna_distance[index],
+                self.label_theta[index],
+                self.label_SNR[index])
 
     def __len__(self):
         return len(self.data_samples)
@@ -58,14 +63,14 @@ def cal_covariance(data_samples, args):
     covariance_matrix_samples = torch.matmul(data_samples, data_samples.conj().transpose(1, 2)) / args.num_snapshots
     return covariance_matrix_samples
 
-def cal_dictionary(frequency, args):
+def cal_dictionary(frequency, args, idx):
     dictionary = np.zeros((args.antenna_num**2, args.num_meshes), dtype=np.complex64)
     num_grids = args.num_meshes
     w_m = np.zeros((args.antenna_num, 121)) + 1j * np.zeros((args.antenna_num, 121))
     for i in range(args.antenna_num):
         theta_grids = np.arange(args.theta_min, args.theta_max+1, int((args.theta_max+1-args.theta_min)/args.num_meshes)).reshape(-1)
 
-        manifold = np.exp(1j * 2 * np.pi * frequency * args.antenna_distance * np.arange(args.antenna_num)[:, np.newaxis] * np.sin(np.deg2rad(theta_grids)) / args.speed_of_sound)
+        manifold = np.exp(1j * 2 * np.pi * frequency * args.antenna_distance[idx] * np.arange(args.antenna_num)[:, np.newaxis] * np.sin(np.deg2rad(theta_grids)) / args.speed_of_sound)
 
         for j in range(args.num_meshes):
             steer_vec = manifold[:, j].reshape(-1, 1)
@@ -97,15 +102,12 @@ def plot_sample(method: str, results, label_theta, grid_theta, args, save_path=N
 
 def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     model.train()
+    plt.style.use(['science', 'ieee', 'grid'])
     for epc in range(epoch):
         if epc <= 20 or epc % 10 == 0:
             torch.save({'model': model.state_dict()}, "../../model/model.pth")
         losses = []
-        for data_samples, paras, label_theta, label_SNR in dataloader:
-
-            spacing_sample = paras['antenna_distance']
-            fre_center = paras['frequency_center']
-            fre_fault = paras['frequency_fault']
+        for idx_epc, (data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR) in enumerate(dataloader):
 
             args.antenna_distance = spacing_sample
             args.frequency_center = fre_center
@@ -115,7 +117,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
 
             covariance_vector = covariance_matrix_samples.transpose(2, 3).reshape(covariance_matrix_samples.shape[0], covariance_matrix_samples.shape[1], args.antenna_num ** 2, 1)
 
-            result, result_init_all = model(paras, covariance_vector)
+            result_mulchannels, result, result_init_all = model(args, covariance_vector)
 
             # print(f"Antenna distance: {spacing_sample}")
             # print(f"Center frequency: {fre_center}")
@@ -123,24 +125,28 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             # print(f"Ground truth: {label_theta}")
             # print(f"SNR: {label_SNR}")
 
-            plot_sample('ISTA', result.cpu().detach().numpy().reshape(9, 121, 1), label_theta.reshape(-1), np.linspace(-60, 60, 121), args, '../../Test/Figures/ISTA-500.pdf')
+            # plot_sample('ISTA', result.cpu().detach().numpy().reshape(9, 121, 1), label_theta.reshape(-1), np.linspace(-60, 60, 121), args, '../../Test/Figures/ISTA-500.pdf')
 
-            label = np.zeros((result.shape[0], result.shape[-2], 1))
-            for idx in range(result.shape[1]):
-                if int(idx - 60) == int(label_theta):
-                    label[:, idx, :] = 1
+            label = np.zeros_like(result.cpu().detach().numpy())
+            for bat_id in range(result.shape[0]):
+                for idx in range(result.shape[-2]):
+                    if int(idx - 60) == int(label_theta[bat_id]):
+                        label[bat_id, :, idx, :] = 1
 
-            result_ave = torch.mean(result, dim=1).to(torch.float32)
             label = torch.from_numpy(label).to(torch.float32)
-            # plt.plot(result_ave.cpu().detach().numpy().reshape(-1), label='Result')
-            # plt.plot(label.cpu().detach().numpy().reshape(-1), label='Label')
-            # plt.legend()
-            # plt.show()
-            loss = criterion(result_ave, label)
+            if idx_epc % 10 == 0:
+                for chanel in range(result_mulchannels.shape[1]):
+                    plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
+                plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
+                plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
+                plt.legend()
+                plt.show()
+            loss = criterion(result, label)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print(f"Epoch: {epc}, Loss: {loss.item()}")
+            # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
+            print(f"Epoch: {epc}, Loss: {loss.item()}, Step size: {model.gamma.item()}")
             losses.append(loss.item())
     return losses
 

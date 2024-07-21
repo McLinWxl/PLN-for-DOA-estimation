@@ -74,15 +74,12 @@ def SBL(raw_data, frequency, args, max_iteration=500, error_threshold=1e-3):
 
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2train_2750_9channels.pt')
+    dataset_ld = torch.load('../../data/data2val.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
+    idx_val = 11
     # read a sample
-    data_samples, paras, label_theta, label_SNR = dataset_ld[211]
-
-    spacing_sample = paras['antenna_distance']
-    fre_center = paras['frequency_center']
-    fre_fault = paras['frequency_fault']
+    data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR = dataset_ld[idx_val]
 
     args.antenna_distance = spacing_sample
     args.frequency_center = fre_center
