@@ -8,6 +8,7 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import time
 
 
 class DatasetGeneration_sample(torch.utils.data.Dataset):
@@ -103,7 +104,11 @@ def plot_sample(method: str, results, label_theta, grid_theta, args, save_path=N
 def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     model.train()
     plt.style.use(['science', 'ieee', 'grid'])
+    time_start = time.time()
     for epc in range(epoch):
+        if epc == 10:
+            print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
+
         if epc <= 20 or epc % 10 == 0:
             torch.save({'model': model.state_dict()}, "../../model/model.pth")
         losses = []
@@ -134,7 +139,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
                         label[bat_id, :, idx, :] = 1
 
             label = torch.from_numpy(label).to(torch.float32)
-            if idx_epc % 10 == 0:
+            if idx_epc % 1 == 0:
                 for chanel in range(result_mulchannels.shape[1]):
                     plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
                 plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
@@ -146,7 +151,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             loss.backward()
             optimizer.step()
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
-            print(f"Epoch: {epc}, Loss: {loss.item()}, Step size: {model.gamma.item()}")
+            print(f"Epoch: {epc}, Loss: {loss.item()}, Costs Time: {time.time() - time_start} Seconds")
             losses.append(loss.item())
     return losses
 

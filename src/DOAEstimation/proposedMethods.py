@@ -12,6 +12,7 @@ from functions import DatasetGeneration_sample, cal_steer_vector, cal_covariance
 from __init__ import args_doa, args_unfolding_doa
 args = args_doa()
 args_unfolding = args_unfolding_doa()
+import time
 
 
 class proposedMethods(torch.nn.Module):
@@ -26,13 +27,21 @@ class proposedMethods(torch.nn.Module):
         self.device = args_unfolding.device
 
         # self.theta = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True) # smaller
-        self.gamma = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True)
+        # self.gamma = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True)
+
         self.leakly_relu = torch.nn.LeakyReLU(0.1)
         self.relu = torch.nn.ReLU()
+        self.sigmoid = torch.nn.Sigmoid()
 
-        self.conv1 = torch.nn.Conv2d(in_channels=9, out_channels=16, kernel_size=(3, 3), stride=1, padding='same')
-        self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=12, kernel_size=(3, 3), stride=1, padding='same')
-        self.conv3 = torch.nn.Conv2d(in_channels=12, out_channels=9, kernel_size=(3, 3), stride=1, padding='same')
+        self.conv1 = torch.nn.Conv1d(in_channels=9, out_channels=18, kernel_size=3, stride=1, padding='same')
+        self.conv2 = torch.nn.Conv1d(in_channels=18, out_channels=12, kernel_size=3, stride=1, padding='same')
+        self.conv3 = torch.nn.Conv1d(in_channels=12, out_channels=9, kernel_size=3, stride=1, padding='same')
+
+        assert self.M2 == 64
+        # self.conv1_ =
+        self.linear1 = torch.nn.Linear(in_features=self.num_grids, out_features=int(self.num_grids*self.num_grids / 15))
+        self.linear2 = torch.nn.Linear(in_features=int(self.num_grids*self.num_grids / 15), out_features=int(self.num_grids*self.num_grids / 10))
+        self.linear3 = torch.nn.Linear(in_features=int(self.num_grids*self.num_grids / 10), out_features=self.num_grids*self.num_grids)
 
     def thresholding_module(self, x):
         """
@@ -41,14 +50,38 @@ class proposedMethods(torch.nn.Module):
         :return: shape of (batch_size, search_numbers, num_grids, 1)
         """
         x_shortcut = x
+        search_num = x.shape[1]
+        x = x.reshape(-1, search_num, self.num_grids)
         # x = self.leakly_relu(x)
         x = self.conv1(x)
         x = self.leakly_relu(x)
         x = self.conv2(x)
         x = self.leakly_relu(x)
         x = self.conv3(x)
+        x = x.reshape(-1, search_num, self.num_grids, 1)
         x = x_shortcut - x
+        x = self.leakly_relu(x)
         return x
+
+    def step_module(self, x_):
+        """
+        Apply thresholding to the input data
+        :param x: shape of (batch_size, search_numbers, num_grids, 1)
+        :return: shape of (batch_size, search_numbers, M2, M2)
+        """
+        batch_size, search_numbers, num_grids, _ = x_.shape
+        gamma = (torch.zeros(batch_size, search_numbers, num_grids, num_grids) + 1j * torch.zeros(batch_size, search_numbers, num_grids, num_grids)).to(self.device)
+        for i in range(search_numbers):
+            x = x_[:, i]
+            x = x.reshape(-1, num_grids)
+            x = self.linear1(x)
+            x = self.sigmoid(x)
+            x = self.linear2(x)
+            x = self.sigmoid(x)
+            x = self.linear3(x)
+            x = x.reshape(-1, num_grids, num_grids)
+            gamma[:, i] = x
+        return gamma
 
     # def combination_module(self, x):
     #     """
@@ -67,7 +100,6 @@ class proposedMethods(torch.nn.Module):
     #     x = self.relu(x)
     #     return x
 
-        ...
     def forward(self, paras, covariance_vector):
         """
         :param paras:
@@ -103,13 +135,17 @@ class proposedMethods(torch.nn.Module):
         result = result_init
         identity_matrix = (torch.eye(self.num_grids) + 1j * torch.zeros([self.num_grids, self.num_grids])).to(
             self.device)
-
+        gamma_mat = self.step_module(result_init)
         for i in range(self.num_layers):
             # TODO: gamma is trainable. It should be learned from the former layer.
-            Wt = identity_matrix - self.gamma * torch.matmul(dictionary_band.conj().transpose(2, 3), dictionary_band)
-            We = self.gamma * dictionary_band.conj().transpose(2, 3)
+            # Wt = identity_matrix - gamma * torch.matmul(dictionary_band.conj().transpose(2, 3), dictionary_band)
+            # We = gamma * dictionary_band.conj().transpose(2, 3)
+            Wt = identity_matrix - torch.matmul(gamma_mat, torch.matmul(dictionary_band.conj().transpose(2, 3), dictionary_band))
+            We = torch.matmul(gamma_mat, dictionary_band.conj().transpose(2, 3))
             s = torch.matmul(Wt, result + 1j * torch.zeros_like(result)) + torch.matmul(We, covariance_vector)
+            s = s / (torch.norm(s, dim=2, keepdim=True) + 1e-20)
             s_abs = torch.abs(s)
+            gamma_mat = self.step_module(s_abs)
             # TODO: theta is trainable, and relu can be replaced.
             # TODO: Soft-threshold can be replaced a neural model.
             # result = self.relu(s_abs - self.theta)
@@ -132,7 +168,7 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=200, shuffle=True)
 
     model = proposedMethods()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0004)
     # criterion = torch.nn.MSELoss()
     criterion = torch.nn.MSELoss()
 
