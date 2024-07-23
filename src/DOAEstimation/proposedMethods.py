@@ -20,6 +20,7 @@ class proposedMethods(torch.nn.Module):
         super(proposedMethods, self).__init__()
         self.args = args
         self.num_sensors = args.antenna_num
+        self.num_search = args.search_numbers
         M2 = self.num_sensors ** 2
         self.num_grids = args.num_meshes
         self.M2 = M2
@@ -29,19 +30,25 @@ class proposedMethods(torch.nn.Module):
         # self.theta = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True) # smaller
         # self.gamma = torch.nn.Parameter(torch.Tensor([0.001]), requires_grad=True)
 
-        self.leakly_relu = torch.nn.LeakyReLU(0.1)
+        self.leakly_relu = torch.nn.LeakyReLU(0.01)
         self.relu = torch.nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
 
-        self.conv1 = torch.nn.Conv1d(in_channels=9, out_channels=18, kernel_size=3, stride=1, padding='same')
+        self.conv1 = torch.nn.Conv1d(in_channels=self.num_search, out_channels=18, kernel_size=3, stride=1, padding='same')
+        self.batch_norm_conv1 = torch.nn.BatchNorm1d(18)
         self.conv2 = torch.nn.Conv1d(in_channels=18, out_channels=12, kernel_size=3, stride=1, padding='same')
-        self.conv3 = torch.nn.Conv1d(in_channels=12, out_channels=9, kernel_size=3, stride=1, padding='same')
+        self.batch_norm_conv2 = torch.nn.BatchNorm1d(12)
+        self.conv3 = torch.nn.Conv1d(in_channels=12, out_channels=self.num_search, kernel_size=3, stride=1, padding='same')
+        self.batch_norm_conv3 = torch.nn.BatchNorm1d(9)
 
         assert self.M2 == 64
         # self.conv1_ =
         self.linear1 = torch.nn.Linear(in_features=self.num_grids, out_features=int(self.num_grids*self.num_grids / 15))
+        self.batch_norm_linear1 = torch.nn.BatchNorm1d(int(self.num_grids*self.num_grids / 15))
         self.linear2 = torch.nn.Linear(in_features=int(self.num_grids*self.num_grids / 15), out_features=int(self.num_grids*self.num_grids / 10))
+        self.batch_norm_linear2 = torch.nn.BatchNorm1d(int(self.num_grids*self.num_grids / 10))
         self.linear3 = torch.nn.Linear(in_features=int(self.num_grids*self.num_grids / 10), out_features=self.num_grids*self.num_grids)
+        self.batch_norm_linear3 = torch.nn.BatchNorm1d(self.num_grids*self.num_grids)
 
     def thresholding_module(self, x):
         """
@@ -54,13 +61,17 @@ class proposedMethods(torch.nn.Module):
         x = x.reshape(-1, search_num, self.num_grids)
         # x = self.leakly_relu(x)
         x = self.conv1(x)
+        x = self.batch_norm_conv1(x)
         x = self.leakly_relu(x)
         x = self.conv2(x)
+        x = self.batch_norm_conv2(x)
         x = self.leakly_relu(x)
         x = self.conv3(x)
+        x = self.batch_norm_conv3(x)
         x = x.reshape(-1, search_num, self.num_grids, 1)
+        x = self.relu(x)
         x = x_shortcut - x
-        x = self.leakly_relu(x)
+        x = self.relu(x)
         return x
 
     def step_module(self, x_):
@@ -75,11 +86,15 @@ class proposedMethods(torch.nn.Module):
             x = x_[:, i]
             x = x.reshape(-1, num_grids)
             x = self.linear1(x)
+            x = self.batch_norm_linear1(x)
             x = self.sigmoid(x)
             x = self.linear2(x)
+            x = self.batch_norm_linear2(x)
             x = self.sigmoid(x)
             x = self.linear3(x)
+            x = self.batch_norm_linear3(x)
             x = x.reshape(-1, num_grids, num_grids)
+            x = self.relu(x)
             gamma[:, i] = x
         return gamma
 
@@ -158,6 +173,9 @@ class proposedMethods(torch.nn.Module):
         result_ave = torch.mean(result, dim=1, keepdim=True).to(torch.float32)
         # result_ave = self.combination_module(result)
 
+        # normalize result_ave to [0, 1]
+        result_ave = (result_ave - torch.min(result_ave)) / (torch.max(result_ave) - torch.min(result_ave) + 1e-20)
+
         return result, result_ave, result_init_all
 
 
@@ -165,7 +183,7 @@ class proposedMethods(torch.nn.Module):
 if __name__ == '__main__':
     dataset_ld = torch.load('../../data/data2train_new.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=200, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=100, shuffle=True)
 
     model = proposedMethods()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0004)
@@ -174,7 +192,7 @@ if __name__ == '__main__':
 
 
 
-    epoch = 5
+    epoch = 100
 
     losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion, args=args)
     # save losses as csv file

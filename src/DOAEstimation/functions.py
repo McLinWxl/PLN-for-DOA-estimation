@@ -110,7 +110,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
 
         if epc <= 20 or epc % 10 == 0:
-            torch.save({'model': model.state_dict()}, "../../model/model.pth")
+            torch.save({'model': model.state_dict()}, f"../../model/model_{epc}.pth")
         losses = []
         for idx_epc, (data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR) in enumerate(dataloader):
 
@@ -139,7 +139,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
                         label[bat_id, :, idx, :] = 1
 
             label = torch.from_numpy(label).to(torch.float32)
-            if idx_epc % 1 == 0:
+            if idx_epc == 0:
                 for chanel in range(result_mulchannels.shape[1]):
                     plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
                 plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
@@ -154,6 +154,49 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             print(f"Epoch: {epc}, Loss: {loss.item()}, Costs Time: {time.time() - time_start} Seconds")
             losses.append(loss.item())
     return losses
+
+
+def test_proposed(model, checkpoint, dataloader, args):
+    model.load_state_dict(torch.load(checkpoint)['model'])
+    model.eval()
+    plt.style.use(['science', 'ieee', 'grid'])
+    time_start = time.time()
+    for idx_epc, (data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR) in enumerate(dataloader):
+
+        args.antenna_distance = spacing_sample
+        args.frequency_center = fre_center
+        args.frequency_fault = fre_fault
+
+        covariance_matrix_samples = torch.matmul(data_samples, data_samples.conj().transpose(2, 3)) / args.num_snapshots
+
+        covariance_vector = covariance_matrix_samples.transpose(2, 3).reshape(covariance_matrix_samples.shape[0], covariance_matrix_samples.shape[1], args.antenna_num ** 2, 1)
+
+        result_mulchannels, result, result_init_all = model(args, covariance_vector)
+
+        # print(f"Antenna distance: {spacing_sample}")
+        # print(f"Center frequency: {fre_center}")
+        # print(f"Fault frequency: {fre_fault}")
+        # print(f"Ground truth: {label_theta}")
+        # print(f"SNR: {label_SNR}")
+
+        # plot_sample('ISTA', result.cpu().detach().numpy().reshape(9, 121, 1), label_theta.reshape(-1), np.linspace(-60, 60, 121), args, '../../Test/Figures/ISTA-500.pdf')
+
+        label = np.zeros_like(result.cpu().detach().numpy())
+        for bat_id in range(result.shape[0]):
+            for idx in range(result.shape[-2]):
+                if int(idx - 60) == int(label_theta[bat_id]):
+                    label[bat_id, :, idx, :] = 1
+
+        label = torch.from_numpy(label).to(torch.float32)
+        if idx_epc % 2 == 0:
+            for chanel in range(result_mulchannels.shape[1]):
+                plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
+            plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
+            plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
+            plt.legend()
+            plt.show()
+
+
 
 
 
