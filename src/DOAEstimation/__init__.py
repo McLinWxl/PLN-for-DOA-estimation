@@ -45,7 +45,7 @@ def args_doa():
 
 def args_unfolding_doa():
     ARGS = argparse.Namespace(
-        num_layers=10,
+        num_layers=3,
         device='cpu',
 
     )

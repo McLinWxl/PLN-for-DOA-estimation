@@ -132,26 +132,38 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
 
             # plot_sample('ISTA', result.cpu().detach().numpy().reshape(9, 121, 1), label_theta.reshape(-1), np.linspace(-60, 60, 121), args, '../../Test/Figures/ISTA-500.pdf')
 
-            label = np.zeros_like(result.cpu().detach().numpy())
+            label = torch.zeros_like(result)
             for bat_id in range(result.shape[0]):
                 for idx in range(result.shape[-2]):
                     if int(idx - 60) == int(label_theta[bat_id]):
                         label[bat_id, :, idx, :] = 1
 
-            label = torch.from_numpy(label).to(torch.float32)
-            if idx_epc == 0:
+            label_all_layers = torch.zeros_like(result_init_all)
+            for search_idx in range(result_init_all.shape[1]):
+                for layer_idx in range(result_init_all.shape[2]):
+                    label_all_layers[:, search_idx, layer_idx, :, :] = label.reshape(-1, label.shape[-2], 1)
+
+            # label = torch.from_numpy(label).to(torch.float32)
+
+            # Calculate the sparse regularization term
+            lambda_sparse = 0.1
+            loss_recovery = criterion(result, label)
+            loss_sparse = torch.nn.L1Loss()(result_init_all, label_all_layers)
+            loss = (1-lambda_sparse) * loss_recovery + lambda_sparse * loss_sparse
+
+            if idx_epc % 10 == 0:
                 for chanel in range(result_mulchannels.shape[1]):
                     plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
                 plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
                 plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
                 plt.legend()
                 plt.show()
-            loss = criterion(result, label)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
-            print(f"Epoch: {epc}, Loss: {loss.item()}, Costs Time: {time.time() - time_start} Seconds")
+            print(f"Epoch: {epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}, \n, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, Costs Time: {time.time() - time_start} Seconds")
             losses.append(loss.item())
     return losses
 
