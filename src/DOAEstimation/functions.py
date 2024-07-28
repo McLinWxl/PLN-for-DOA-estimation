@@ -105,6 +105,10 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     model.train()
     plt.style.use(['science', 'ieee', 'grid'])
     time_start = time.time()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5,
+                                                           threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.0004,
+                                                           eps=1e-08)
+
     for epc in range(epoch):
         if epc == 10:
             print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
@@ -138,7 +142,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
                     if int(idx - 60) == int(label_theta[bat_id]):
                         label[bat_id, :, idx, :] = 1
 
-            label_all_layers = torch.zeros_like(result_init_all)
+            label_all_layers = torch.zeros_like(result_init_all)  # shape of (batch_size, search_numbers, num_layers, num_meshes, 1)
             for search_idx in range(result_init_all.shape[1]):
                 for layer_idx in range(result_init_all.shape[2]):
                     label_all_layers[:, search_idx, layer_idx, :, :] = label.reshape(-1, label.shape[-2], 1)
@@ -146,24 +150,44 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             # label = torch.from_numpy(label).to(torch.float32)
 
             # Calculate the sparse regularization term
-            lambda_sparse = 0.1
-            loss_recovery = criterion(result, label)
-            loss_sparse = torch.nn.L1Loss()(result_init_all, label_all_layers)
-            loss = (1-lambda_sparse) * loss_recovery + lambda_sparse * loss_sparse
+            # lambda_sparse = 0.1
+            # # loss_recovery = criterion(result, label)
+            # loss_recovery = torch.nn.L1Loss()(result, label)
+            # loss_sparse = torch.nn.L1Loss()(result_init_all, label_all_layers)
+            # loss = (1-lambda_sparse) * loss_recovery + lambda_sparse * loss_sparse
+            loss = torch.nn.MSELoss()(result_init_all[:,:,-1], label_all_layers[:,:,-1])
 
             if idx_epc % 10 == 0:
+                x_label = [i-60 for i in range(label.shape[-2])]
                 for chanel in range(result_mulchannels.shape[1]):
-                    plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
-                plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
-                plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
+                    plt.plot(x_label, result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', alpha=0.5, linewidth=0.4)
+                plt.plot(x_label, result[0].cpu().detach().numpy().reshape(-1), ls='-', label='Estimated Spectrum', color='k', linewidth=1.5)
+                for xlabel_idx in range(label.shape[-2]):
+                    if label[0, 0, xlabel_idx] == 1:
+                        plt.axvline(x=xlabel_idx-60, color='r', linestyle='--', linewidth=1, label='Ground truth')
+                plt.xlabel('Angles (Degrees)')
+                plt.ylabel('Normalized Amplitude')
+                # plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
+                plt.title(f"Output of {epc}-{idx_epc}")
                 plt.legend()
-                plt.show()
+                plt.savefig(f"../../Test/Figs_weights/{epc}-{idx_epc}.pdf")
+                # plt.show()
+                plt.close()
+                print(
+                    # f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, \n, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, Costs Time: {time.time() - time_start} Seconds")
+                f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']}, Costs Time: {time.time() - time_start} Seconds")
+                with open(f'../../Test/Weights/weights_{epc}_{idx_epc}.txt', 'w') as f:
+                    if epc == 0 and idx_epc == 0:
+                        f.write(f"Time of start: {time_start}")
+                    # f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, \n ,Threshold: \n{[model.theta[i].item() for i in range(len(model.theta))]} \n , Step size: \n {[model.gamma[i].item() for i in range(len(model.gamma))]}")
+                    f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']} , \n ,Threshold: \n{[model.theta_amp[i].item() for i in range(len(model.theta_amp))]} \n , Step size: \n {[model.gamma_amp[i].item() for i in range(len(model.gamma_amp))]}")
+
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step(loss)
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
-            print(f"Epoch: {epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}, \n, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, Costs Time: {time.time() - time_start} Seconds")
             losses.append(loss.item())
     return losses
 
@@ -202,9 +226,12 @@ def test_proposed(model, checkpoint, dataloader, args):
         label = torch.from_numpy(label).to(torch.float32)
         if idx_epc % 2 == 0:
             for chanel in range(result_mulchannels.shape[1]):
-                plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='k', alpha=0.6, linewidth=0.7)
-            plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='b', linewidth=1.5)
-            plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
+                plt.plot(result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', color='r', alpha=0.4, linewidth=0.5)
+            plt.plot(result[0].cpu().detach().numpy().reshape(-1), label='Result', color='k', linewidth=1.5)
+            for x_idx in range(label.shape[-2]):
+                if label[0, 0, x_idx] == 1:
+                    plt.axvline(x=x_idx, color='r', linestyle='--', linewidth=0.5)
+            # plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
             plt.legend()
             plt.show()
 

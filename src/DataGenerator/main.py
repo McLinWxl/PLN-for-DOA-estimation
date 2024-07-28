@@ -45,9 +45,12 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
         return len(self.data_samples)
 
 def dataset_train(args):
-    center_sets = [8500, 7000, 5666, 5000, 4250, 4000, 3400, 3000, 2833]
-    fault_sets = [75, 150, 300, 600]
-    spacing_sets = [0.02, 0.03, 0.04, 0.05, 0.06]
+    # center_sets = [8500, 7000, 5666, 5000, 4250, 4000, 3400, 3000, 2833]
+    # fault_sets = [75, 150, 300, 600]
+    # spacing_sets = [0.02, 0.03, 0.04, 0.05, 0.06]
+    center_sets = [14000, 4000, 1750]
+    fault_sets = [50, 100, 200, 450, 800]
+    spacing_sets = [0.01, 0.035, 0.08]
     # center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
     # fault_sets = [75, 150, 225, 300, 450, 600, 800]
     # spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
@@ -82,10 +85,10 @@ if '__main__' == __name__:
     dataset = dataset_train(args)
     print(f"Dataset length: {len(dataset)}")
     # Save dataset
-    torch.save(dataset, '../../data/data2train_new.pt')
+    torch.save(dataset, '../../data/data2test.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2train_new.pt')
+    dataset_ld = torch.load('../../data/data2test.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample

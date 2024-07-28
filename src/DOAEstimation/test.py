@@ -12,9 +12,9 @@ args = args_doa()
 args_unfolding = args_unfolding_doa()
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2train_new.pt')
+    dataset_ld = torch.load('../../data/data2val.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    test_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=100, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=1, shuffle=True)
 
     model = proposedMethods()
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -22,6 +22,6 @@ if __name__ == '__main__':
     # criterion = torch.nn.MSELoss()
 
     # epoch = 100
-    checkpoint = ('../../model/model.pth')
+    checkpoint = ('../../model/model_2.pth')
     losses = test_proposed(model, checkpoint, test_loader, args)
 
