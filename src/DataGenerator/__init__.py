@@ -3,8 +3,8 @@ import argparse
 
 def args_data_generator():
     ARGS = argparse.Namespace(
-        frequency_center=5666,
-        frequency_fault=300,  # must less than frequency_center / 10
+        frequency_center=None,
+        frequency_fault=50,  # must less than frequency_center / 10
         damping_ratio=0.1,
         time=9,  # 9 -> 100
 
@@ -20,18 +20,18 @@ def args_data_generator():
         antenna_distance=0.03,  # speed_of_sound / (2*frequency_center),
         snapshot_length=8192,
         num_snapshots=100,
-        search_numbers=9,
+        search_numbers=5,
 
-        SNR_source_min=-10,
+        SNR_source_min=0,
         SNR_source_max=0,
 
-        SNR_env_min=-10,
+        SNR_env_min=0,
         SNR_env_max=0,
 
-        theta_min=-59,
-        theta_max=59,
+        theta_min=-50,
+        theta_max=50,
 
-        samples=100,  # different SNR and theta
-        samples_repeat=3,  # different source waves
+        samples=20,  # different SNR and theta-50
+        samples_repeat=1,  # different source waves-2
     )
     return ARGS

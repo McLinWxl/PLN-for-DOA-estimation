@@ -74,10 +74,10 @@ def SBL(raw_data, frequency, args, max_iteration=500, error_threshold=1e-3):
 
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2val.pt')
+    dataset_ld = torch.load('../../data/data2test_-5.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
-    idx_val = 11
+    idx_val = 410
     # read a sample
     data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR = dataset_ld[idx_val]
 

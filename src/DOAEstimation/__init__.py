@@ -26,26 +26,26 @@ def args_doa():
         antenna_distance=0.03,  # speed_of_sound / (2*frequency_center),
         snapshot_length=8192,
         num_snapshots=100,
-        search_numbers=9,
+        search_numbers=5,
 
-        SNR_source_min=-10,
-        SNR_source_max=0,
+        SNR_source_min=-5,
+        SNR_source_max=5,
 
-        SNR_env_min=-10,
-        SNR_env_max=0,
+        SNR_env_min=-5,
+        SNR_env_max=5,
 
         theta_min=-60,
         theta_max=60,
         num_meshes=121,
 
-        samples=50,  # different SNR and theta
-        samples_repeat=2,  # different source waves
+        samples=150,  # different SNR and theta
+        samples_repeat=1,  # different source waves
     )
     return ARGS
 
 def args_unfolding_doa():
     ARGS = argparse.Namespace(
-        num_layers=20,
+        num_layers=40,
         device='cpu',
 
     )

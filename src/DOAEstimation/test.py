@@ -22,6 +22,6 @@ if __name__ == '__main__':
     # criterion = torch.nn.MSELoss()
 
     # epoch = 100
-    checkpoint = ('../../model/model_2.pth')
+    checkpoint = ('../../model/model_0.pth')
     losses = test_proposed(model, checkpoint, test_loader, args)
 

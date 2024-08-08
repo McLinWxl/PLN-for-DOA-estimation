@@ -9,7 +9,68 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import time
+import scipy.signal
+import heapq
+import os
 
+
+def calculate_error(peak, label, num_sources):
+    """
+    :param peak: (num_lists, samples, 2)
+    :return: error, RMSE, NMSE, prob
+    """
+    DOA_train = label
+    num_list, num_id, _ = peak.shape
+    RMSE = np.zeros(num_list)
+    NMSE = np.zeros(num_list)
+    prob = np.zeros(num_list)
+    predict_st = peak
+    DOA_train_st = DOA_train
+    error_ = np.zeros((num_list, num_id, num_sources))
+    for snr in range(num_list):
+        for itt in range(num_id):
+            predict_st[snr, itt] = np.sort(peak[snr, itt])
+            DOA_train_st[snr, itt] = np.sort(DOA_train[snr, itt])
+    for snr in range(num_list):
+        error = np.abs(np.sort(predict_st[snr]) - DOA_train_st[snr])
+        error_[snr] = (predict_st[snr]) - DOA_train_st[snr]
+        for idx in range(num_id):
+            for i in range(num_sources):
+                prob[snr] += np.sum(error[idx, i] <= 4.4)
+                if error[idx, i] > 4.4:
+                    error[idx, i] = 10
+                # if error[idx, i] == 0:
+                #     error[idx, i] =
+        RMSE[snr] = np.sqrt(np.mean(error ** 2))
+        NMSE[snr] = (np.mean(error ** 2) / np.mean(DOA_train_st[snr] ** 2))
+        prob[snr] = prob[snr] / num_id
+
+    return error_, RMSE, NMSE, prob / num_sources
+
+def Spect2DoA_no_insert(Spectrum, num_sources=2, start_bias=60):
+    """
+    :param Spectrum: (num_samples, num_meshes, 1)
+    :param num_sources:
+    :param height_ignore:
+    :param start_bias:
+    :return: (num_samples, num_sources)
+    """
+    num_samples, num_meshes, _ = Spectrum.shape
+    angles = np.zeros((num_samples, num_sources))
+    grids_mesh = np.arange(num_meshes) - start_bias
+    for num in range(num_samples):
+        li_0 = Spectrum[num, :].reshape(-1)
+        # li_0[li_0 < 0] = 0
+        li = li_0
+        angle = np.zeros(num_sources) - 5
+        peaks, _ = scipy.signal.find_peaks(li)
+        max_spectrum = heapq.nlargest(num_sources, li[peaks])
+        for i in range(len(max_spectrum)):
+            angle[i] = grids_mesh[np.where(li == max_spectrum[i])[0][0]]
+        angles[num] = angle.reshape(-1)
+        if num_sources > 1:
+            angles = np.sort(angles, axis=1)[::-1]
+    return angles
 
 class DatasetGeneration_sample(torch.utils.data.Dataset):
     # def __init__(self, args_):
@@ -105,17 +166,19 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     model.train()
     plt.style.use(['science', 'ieee', 'grid'])
     time_start = time.time()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5,
-                                                           threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.0004,
-                                                           eps=1e-08)
-
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=25,
+    #                                                        threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.0004,
+    #                                                        eps=1e-08)
+    losses = []
+    loss_min = 10
     for epc in range(epoch):
         if epc == 10:
             print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
 
         if epc <= 20 or epc % 10 == 0:
             torch.save({'model': model.state_dict()}, f"../../model/model_{epc}.pth")
-        losses = []
+
+
         for idx_epc, (data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR) in enumerate(dataloader):
 
             args.antenna_distance = spacing_sample
@@ -157,7 +220,12 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             # loss = (1-lambda_sparse) * loss_recovery + lambda_sparse * loss_sparse
             loss = torch.nn.MSELoss()(result_init_all[:,:,-1], label_all_layers[:,:,-1])
 
-            if idx_epc % 10 == 0:
+            if loss.item() < loss_min:
+                with open(f'../../Test/Weights/weights_best.txt', 'w') as f:
+                    f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']} , \n ,Threshold: \n{[model.theta_amp[i].item() for i in range(len(model.theta_amp))]} \n , Step size: \n {[model.gamma_amp[i].item() for i in range(len(model.gamma_amp))]}")
+                loss_min = loss.item()
+
+            if idx_epc  == 3:
                 x_label = [i-60 for i in range(label.shape[-2])]
                 for chanel in range(result_mulchannels.shape[1]):
                     plt.plot(x_label, result_mulchannels[0, chanel].cpu().detach().numpy(), ls='-', alpha=0.5, linewidth=0.4)
@@ -186,9 +254,14 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step(loss)
+            # scheduler.step(loss)
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
             losses.append(loss.item())
+    with open(f'../../Test/Weights/loss.txt', 'w') as f:
+        # f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, \n ,Threshold: \n{[model.theta[i].item() for i in range(len(model.theta))]} \n , Step size: \n {[model.gamma[i].item() for i in range(len(model.gamma))]}")
+        f.write(
+            f"{losses}")
+
     return losses
 
 
@@ -236,7 +309,79 @@ def test_proposed(model, checkpoint, dataloader, args):
             plt.show()
 
 
+class expDataset(torch.utils.data.Dataset):
 
+    def __init__(self, folder_path, num_antennas, num_snps, **kwargs):
+        self.num_antennas = num_antennas
+        self.num_snps = num_snps
+        self.fre_sample = kwargs.get('fre_sample', 51200)
+        self.target_fre = kwargs.get('target_fre', 5666)
+        self.length_window = kwargs.get('length_window', 8192)
+        self.target_fre_width = kwargs.get('target_fre_width', 0)
+        self.is_half_overlapping = kwargs.get('is_half_overlapping', True)
+        self.stride = kwargs.get('stride', 100)
+        self.num_sources = kwargs.get('num_sources', 2)
+        self.folder_path = folder_path
+        self.is_saved = kwargs.get('is_saved', True)
+
+        self.data, self.label = self.split_data(saved=self.is_saved, path_save=self.folder_path)
+        ...
+
+    # def make_snapshots_data(self, file_path) -> tuple:
+    #     files = os.listdir(file_path)
+    #     data_all = np.zeros((0, 0))
+    #     label_all = np.zeros((0, 0))
+    #     identity = file_path.split('/')[-1]
+    #     for idx, file in enumerate(files):
+    #         # DEBUG
+    #         if identity in ['Complete', 'Inner', 'Outer', 'Ball', 'I2535']:
+    #             label = [file.split('.')[0].split('_')[1], file.split('.')[0].split('_')[3]]
+    #             label = list(map(int, label))
+    #         elif identity == 'S5666':
+    #             label = list(map(int, file.split('.')[0].split('_')))
+    #         else:
+    #             raise ValueError('The file name is not correct!')
+    #         file_path = os.path.join(folder_name, file)
+    #         data = np.load(file_path)
+    #         snp_gen = GenSnapshot(data, self.fre_sample, self.target_fre, self.length_window,
+    #                               target_fre_width=self.target_fre_width, is_half_overlapping=self.is_half_overlapping)
+    #         data_snp = snp_gen.get_snapshots(num_antennas=self.num_antennas, num_snapshots=self.num_snps,
+    #                                          stride=self.stride)
+    #         if idx == 0:
+    #             data_all = data_snp
+    #             label = np.array(label).reshape(-1, self.num_sources).repeat(data_snp.shape[0], axis=0)
+    #             label_all = label
+    #         else:
+    #             data_all = np.vstack((data_all, data_snp))
+    #             label = np.array(label).reshape(-1, self.num_sources).repeat(data_snp.shape[0], axis=0)
+    #             label_all = np.vstack((label_all, label))
+    #         # release memory
+    #         del data, data_snp
+    #     return data_all, label_all
+
+
+    def split_data(self, saved, **kwargs):
+        path_save = kwargs.get('path_save', '../../Data/ULA_0.03/S5666')
+        if not saved:
+            # data_, label_ = self.make_snapshots_data(folder_name)
+            # # save data to npy file
+            # data_save = {
+            #     'data': data_,
+            #     'label': label_
+            # }
+            # np.save(os.path.join(path_save, 'data_snp_4372.npy'), data_save)
+            ...
+        else:
+            data_save = np.load(os.path.join(path_save, 'data_snp.npy'), allow_pickle=True)
+            data_ = data_save.item().get('data')
+            label_ = data_save.item().get('label')
+        return data_, label_
+
+    def __getitem__(self, index):
+        return self.data[index], self.label[index]
+
+    def __len__(self):
+        return self.data.shape[0]
 
 
 

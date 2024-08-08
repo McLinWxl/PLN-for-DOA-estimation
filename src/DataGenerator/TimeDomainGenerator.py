@@ -98,6 +98,7 @@ if '__main__' == __name__:
     plt.style.use(['science', 'ieee', 'grid'])
     plt.figure(dpi=800)
     signal_fault_ = fault_generator(args)
+    signal_fault_ = signal_fault_[::args.amp_sample][:8192]
     x_axis = np.linspace(0, 1500 / args.frequency_sampling, 1500)
     plt.plot(x_axis, signal_fault_[0:1500], label='Impulsive signal')
     plt.xlabel('Time (s)')
@@ -114,7 +115,7 @@ if '__main__' == __name__:
     plt.plot(frequency, spectrum, label='Frequency spectrum')
     plt.axvline(x=args.frequency_center, color='red', linestyle='--', label='Center frequency')
     # plt.scatter(args.frequency_center, 1000, marker='+', color='red', s=50)
-    plt.xlim(0, 12000)
+    # plt.xlim(0, 12000)
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Amplitude')
     plt.title(f'Frequency spectrum of impulsive signal at: \n '

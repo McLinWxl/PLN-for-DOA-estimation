@@ -12,26 +12,26 @@ from rich.progress import track
 
 class DatasetGeneration_sample(torch.utils.data.Dataset):
     def __init__(self, args_):
-        signal = fault_generator(args_)
-        data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal, args_)
+        if args_.frequency_center is not None:
+            signal = fault_generator(args_)
+            data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal, args_)
 
-        # paras = {
-        #     'frequency_center': args.frequency_center,
-        #     'frequency_fault': args.frequency_fault,
-        #     'num_bands': args.search_numbers,
-        # }
+            self.data_samples = torch.from_numpy(data_samples_)
+            # self.data_frequency = torch.from_numpy(data_frequency)
+            self.label_theta = torch.from_numpy(label_theta_)
+            self.label_SNR = torch.from_numpy(label_SNR_)
+            # self.paras = paras
 
-        # a_frequency[i] = args.frequency_center + (i - args.search_numbers // 2) * narrow_band
-
-        self.data_samples = torch.from_numpy(data_samples_)
-        # self.data_frequency = torch.from_numpy(data_frequency)
-        self.label_theta = torch.from_numpy(label_theta_)
-        self.label_SNR = torch.from_numpy(label_SNR_)
-        # self.paras = paras
-
-        self.frequency_center = np.zeros_like(label_theta_) + paras['frequency_center']
-        self.frequency_fault = np.zeros_like(label_theta_) + paras['frequency_fault']
-        self.antenna_distance = np.zeros_like(label_theta_) + paras['antenna_distance']
+            self.frequency_center = np.zeros_like(label_theta_) + paras['frequency_center']
+            self.frequency_fault = np.zeros_like(label_theta_) + paras['frequency_fault']
+            self.antenna_distance = np.zeros_like(label_theta_) + paras['antenna_distance']
+        else:  # An empty dataset
+            self.data_samples = []
+            self.label_theta = []
+            self.label_SNR = []
+            self.frequency_center = []
+            self.frequency_fault = []
+            self.antenna_distance = []
 
     def __getitem__(self, index):
         return (self.data_samples[index],
@@ -48,9 +48,15 @@ def dataset_train(args):
     # center_sets = [8500, 7000, 5666, 5000, 4250, 4000, 3400, 3000, 2833]
     # fault_sets = [75, 150, 300, 600]
     # spacing_sets = [0.02, 0.03, 0.04, 0.05, 0.06]
-    center_sets = [14000, 4000, 1750]
-    fault_sets = [50, 100, 200, 450, 800]
-    spacing_sets = [0.01, 0.035, 0.08]
+    ##
+    # center_sets = [4250, 2125]
+    # fault_sets = [300, 600]
+    # spacing_sets = [0.04, 0.08]
+    ##
+    center_sets = [8500, 2833, 1700]
+    fault_sets = [150, 450, 750]
+    spacing_sets = [0.02, 0.06, 0.10]
+    ##
     # center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
     # fault_sets = [75, 150, 225, 300, 450, 600, 800]
     # spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
@@ -85,10 +91,10 @@ if '__main__' == __name__:
     dataset = dataset_train(args)
     print(f"Dataset length: {len(dataset)}")
     # Save dataset
-    torch.save(dataset, '../../data/data2test.pt')
+    torch.save(dataset, '../../data/data2test_S0.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2test.pt')
+    dataset_ld = torch.load('../../data/data2test_S0.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample

@@ -4,15 +4,15 @@
 #  Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
 #  Vestibulum commodo. Ut rhoncus gravida arcu.
 
-with open('../Test/Weights/weights_0_90.txt', 'r') as file:
+with open('../Test/Weights/weights_best.txt', 'r') as file:
     data = file.readlines()
     theta = data[2]
     gamma = data[4]
     # theta = '[0.1, 0.2, 0.3]' of str, convert to list
     theta = theta[1:-3].split(', ')
-    theta = [abs(float(i)) for i in theta]
+    theta = [(float(i)) for i in theta]
     gamma = gamma[2:-1].split(', ')
-    gamma = [abs(float(i)) for i in gamma]
+    gamma = [(float(i)) for i in gamma]
 
 import matplotlib.pyplot as plt
 plt.style.use(['science', 'ieee', 'grid'])
@@ -35,12 +35,12 @@ ax.grid()
 ax.set_xlabel("Layers")
 ax.set_ylabel("Thresholds")
 ax2.set_ylabel("Step size")
-# ax2.set_ylim(0, 35)
-# ax.set_ylim(,100)
+# ax2.set_ylim(-0.5, 0.5)
+# ax.set_ylim(-0.5, 0.5)
 # plt.savefig('0.png')
 # plt.plot(theta, label='Thresholds')
 # plt.plot(gamma, label='Step size')
-plt.savefig('../Test/Figures/weights.pdf')
+# plt.savefig('../Test/Figures/weights.pdf')
 # plt.legend()
 plt.show()
 

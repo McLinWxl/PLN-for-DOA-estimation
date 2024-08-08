@@ -36,8 +36,8 @@ class proposedMethods(torch.nn.Module):
         # self.theta = torch.nn.Parameter(0.17 * torch.ones(self.num_layers), requires_grad=True)
         # self.gamma = torch.nn.Parameter(0.00036 * torch.ones(self.num_layers), requires_grad=True)
 
-        self.theta_amp = torch.nn.Parameter(torch.ones(self.num_layers), requires_grad=True)
-        self.gamma_amp = torch.nn.Parameter(torch.ones(self.num_layers), requires_grad=True)
+        self.theta_amp = torch.nn.Parameter(torch.randn(self.num_layers) / 100, requires_grad=True)
+        self.gamma_amp = torch.nn.Parameter(torch.randn(self.num_layers) / 100, requires_grad=True)
 
         self.leakly_relu = torch.nn.LeakyReLU(0.01)
         self.relu = torch.nn.ReLU()
@@ -64,7 +64,7 @@ class proposedMethods(torch.nn.Module):
 
         # make high dim dictionary, shape: (search_numbers, M2, num_grids) -> (9, 64, 121)
         narrow_band = torch.Tensor(
-            [int(self.args.frequency_center[i] / 15) for i in range(len(self.args.frequency_center))]).to(self.device)
+            [int(self.args.frequency_center[i] / 20) for i in range(len(self.args.frequency_center))]).to(self.device)
         dictionary_band = torch.zeros((num_batch, self.args.search_numbers, self.M2, self.num_grids),
                                       dtype=torch.complex64, device=self.device)
         for bat in range(num_batch):
@@ -96,8 +96,8 @@ class proposedMethods(torch.nn.Module):
             # theta = torch.abs(self.theta[i])
             # TODO: gamma is trainable. It should be learned from the former layer.
 
-            gamma_amp = torch.abs(self.gamma_amp[i])
-            theta_amp = torch.abs(self.theta_amp[i])
+            gamma_amp = 1 + (self.gamma_amp[i])
+            theta_amp = 1 + (self.theta_amp[i])
 
             gamma = (gamma_amp * gamma_init_from_dictionary).reshape(num_batch, self.args.search_numbers, 1, 1)
             theta = (theta_amp * theta_init_from_dictionary).reshape(num_batch, self.args.search_numbers, 1, 1)
@@ -131,21 +131,23 @@ class proposedMethods(torch.nn.Module):
         result_ave = (result_ave - torch.min(result_ave, dim=2, keepdim=True)[0]) / (
                     torch.max(result_ave, dim=2, keepdim=True)[0] - torch.min(result_ave, dim=2, keepdim=True)[
                 0] + 1e-20)
+        result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
+                    torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
 
         return result, result_ave, result_init_all
 
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2train_new.pt')
+    dataset_ld = torch.load('../../data/data2train.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=60, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=10, shuffle=True)
 
     model = proposedMethods()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     # criterion = torch.nn.MSELoss()
     criterion = torch.nn.MSELoss()
 
-    epoch = 100
+    epoch = 10
 
     losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion,
                             args=args)

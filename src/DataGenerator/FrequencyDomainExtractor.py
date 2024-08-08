@@ -87,7 +87,7 @@ def signal_slicer(signal: np.ndarray, args) -> np.ndarray:
     return signal_sliced
 
 
-def fft_transform(signal: np.ndarray, args, max_fre=15000):
+def fft_transform(signal: np.ndarray, args, max_fre=25000):
     """
     Perform FFT on the signal
     :param signal: the signal to be transformed
@@ -162,7 +162,7 @@ def snapshot_exactor(signal, args):
     SNR_env_max = args.SNR_env_max
     num_samples = args.samples
     num_snapshots = args.num_snapshots
-    narrow_band = int(args.frequency_center / 15)
+    narrow_band = int((args.frequency_center / 20))
     data_samples = np.zeros((num_samples, args.search_numbers, args.antenna_num, num_snapshots)) + 1j * np.zeros(
         (num_samples, args.search_numbers, args.antenna_num, num_snapshots))
     data_frequency = np.zeros((args.search_numbers, 1))
@@ -178,7 +178,18 @@ def snapshot_exactor(signal, args):
 
         signal_noised = add_noise(signal, SNR_source)
         signal_noised = min_max_normalize(signal_noised)
-        theta = np.random.randint(theta_min, theta_max)
+        match sample:
+            case 0:
+                theta = 0.0
+            case 1:
+                theta = 10.0
+            case 2:
+                theta = 25.0
+            case 3:
+                theta = 55.0
+            case _:
+                # theta = np.random.randint(theta_min, theta_max)  # for training
+                theta = np.random.uniform(theta_min, theta_max)  # for testing
         time_dalays = [delay_time_calculator(args.antenna_distance * i, theta, args) for i in range(args.antenna_num)]
         signals_delayed = [time_delay(signal_noised, time_dalay, args) for time_dalay in time_dalays]
 
