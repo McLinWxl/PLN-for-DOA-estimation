@@ -47,6 +47,43 @@ def calculate_error(peak, label, num_sources):
 
     return error_, RMSE, NMSE, prob / num_sources
 
+def Spect2DoA(Spectrum, num_sources=2, start_bias=60):
+    """
+    :param Spectrum: (num_samples, num_meshes, 1)
+    :param num_sources:
+    :param height_ignore:
+    :param start_bias:
+    :return: (num_samples, num_sources)
+    """
+    num_samples, num_meshes, _ = Spectrum.shape
+    angles = np.zeros((num_samples, num_sources))
+    for num in range(num_samples):
+        li_0 = Spectrum[num, :].reshape(-1)
+        # li_0[li_0 < 0] = 0
+        li = li_0
+        angle = np.zeros(num_sources) - 5
+        peaks_idx = np.zeros(num_sources)
+        grids_mesh = np.arange(num_meshes) - start_bias
+        peaks, _ = scipy.signal.find_peaks(li)
+        max_spectrum = heapq.nlargest(num_sources, li[peaks])
+        for i in range(len(max_spectrum)):
+            peaks_idx[i] = np.where(li == max_spectrum[i])[0][0]
+            angle[i] = (
+                li[int(peaks_idx[i] + 1)] / (li[int(peaks_idx[i] + 1)]
+                                             + li[int(peaks_idx[i])]) * grids_mesh[int(peaks_idx[i] + 1)]
+                + li[int(peaks_idx[i])] / (li[int(peaks_idx[i] + 1)]
+                                           + li[int(peaks_idx[i])]) * grids_mesh[int(peaks_idx[i])]
+                if li[int(peaks_idx[i] - 1)] < li[int(peaks_idx[i] + 1)]
+                else li[int(peaks_idx[i] - 1)] / (li[int(peaks_idx[i] - 1)]
+                                                  + li[int(peaks_idx[i])]) * grids_mesh[int(peaks_idx[i] - 1)]
+                     + li[int(peaks_idx[i])] / (li[int(peaks_idx[i] - 1)]
+                                                + li[int(peaks_idx[i])]) * grids_mesh[int(peaks_idx[i])]
+            )
+        angles[num] = angle.reshape(-1)
+    if num_sources > 1:
+        angles = np.sort(angles, axis=1)[::-1]
+    return angles
+
 def Spect2DoA_no_insert(Spectrum, num_sources=2, start_bias=60):
     """
     :param Spectrum: (num_samples, num_meshes, 1)
@@ -171,12 +208,13 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     #                                                        eps=1e-08)
     losses = []
     loss_min = 10
+    name_file = 'L320-V0'
     for epc in range(epoch):
         if epc == 10:
             print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
 
-        if epc <= 20 or epc % 10 == 0:
-            torch.save({'model': model.state_dict()}, f"../../model/model_{epc}.pth")
+        # if epc <= 20 or epc % 10 == 0:
+        #     torch.save({'model': model.state_dict()}, f"../../model/model_{epc}.pth")
 
 
         for idx_epc, (data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR) in enumerate(dataloader):
@@ -221,7 +259,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             loss = torch.nn.MSELoss()(result_init_all[:,:,-1], label_all_layers[:,:,-1])
 
             if loss.item() < loss_min:
-                with open(f'../../Test/Weights/weights_best.txt', 'w') as f:
+                with open(f'../../Test/{name_file}/Weights/weights_best.txt', 'w') as f:
                     f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']} , \n ,Threshold: \n{[model.theta_amp[i].item() for i in range(len(model.theta_amp))]} \n , Step size: \n {[model.gamma_amp[i].item() for i in range(len(model.gamma_amp))]}")
                 loss_min = loss.item()
 
@@ -238,13 +276,13 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
                 # plt.plot(label[0].cpu().detach().numpy().reshape(-1), label='Label')
                 plt.title(f"Output of {epc}-{idx_epc}")
                 plt.legend()
-                plt.savefig(f"../../Test/Figs_weights/{epc}-{idx_epc}.pdf")
+                plt.savefig(f"../../Test/{name_file}/Figs_weights/{epc}-{idx_epc}.pdf")
                 # plt.show()
                 plt.close()
                 print(
                     # f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, \n, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, Costs Time: {time.time() - time_start} Seconds")
                 f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']}, Costs Time: {time.time() - time_start} Seconds")
-                with open(f'../../Test/Weights/weights_{epc}_{idx_epc}.txt', 'w') as f:
+                with open(f'../../Test/{name_file}/Weights/weights_{epc}_{idx_epc}.txt', 'w') as f:
                     if epc == 0 and idx_epc == 0:
                         f.write(f"Time of start: {time_start}")
                     # f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, \n ,Threshold: \n{[model.theta[i].item() for i in range(len(model.theta))]} \n , Step size: \n {[model.gamma[i].item() for i in range(len(model.gamma))]}")
@@ -257,7 +295,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             # scheduler.step(loss)
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
             losses.append(loss.item())
-    with open(f'../../Test/Weights/loss.txt', 'w') as f:
+    with open(f'../../Test/{name_file}/Weights/loss.txt', 'w') as f:
         # f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, lambda_sparse: {lambda_sparse}, Loss recovery: {loss_recovery}, Loss sparse: {loss_sparse}, \n ,Threshold: \n{[model.theta[i].item() for i in range(len(model.theta))]} \n , Step size: \n {[model.gamma[i].item() for i in range(len(model.gamma))]}")
         f.write(
             f"{losses}")

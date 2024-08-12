@@ -116,8 +116,8 @@ class proposedMethods(torch.nn.Module):
 
             result = self.relu(s_abs - theta)
 
-            result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
-                        torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
+            # result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
+            #             torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
 
             # result = result / (torch.norm(result, dim=2, keepdim=True) + 1e-20)
             result_init_all[:, :, i] = result
@@ -140,19 +140,19 @@ class proposedMethods(torch.nn.Module):
 if __name__ == '__main__':
     dataset_ld = torch.load('../../data/data2train.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=10, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=5, shuffle=True)
 
     model = proposedMethods()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     # criterion = torch.nn.MSELoss()
     criterion = torch.nn.MSELoss()
 
-    epoch = 10
+    epoch = 30
 
     losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion,
                             args=args)
     # save losses as csv file
-    np.savetxt('../../Test/losses.csv', losses, delimiter=',')
+    # np.savetxt('../../Test/losses.csv', losses, delimiter=',')
 
     plt.style.use(['science', 'ieee', 'grid'])
     plt.figure(dpi=800)

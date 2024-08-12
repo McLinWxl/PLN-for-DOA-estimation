@@ -180,16 +180,16 @@ def snapshot_exactor(signal, args):
         signal_noised = min_max_normalize(signal_noised)
         match sample:
             case 0:
-                theta = 0.0
+                theta = 0
             case 1:
-                theta = 10.0
+                theta = 10
             case 2:
-                theta = 25.0
+                theta = 25
             case 3:
-                theta = 55.0
+                theta = 55
             case _:
-                # theta = np.random.randint(theta_min, theta_max)  # for training
-                theta = np.random.uniform(theta_min, theta_max)  # for testing
+                theta = np.random.randint(theta_min, theta_max)  # for training
+                # theta = np.random.uniform(theta_min, theta_max)  # for testing
         time_dalays = [delay_time_calculator(args.antenna_distance * i, theta, args) for i in range(args.antenna_num)]
         signals_delayed = [time_delay(signal_noised, time_dalay, args) for time_dalay in time_dalays]
 
