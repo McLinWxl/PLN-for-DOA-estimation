@@ -91,10 +91,10 @@ if '__main__' == __name__:
     dataset = dataset_train(args)
     print(f"Dataset length: {len(dataset)}")
     # Save dataset
-    torch.save(dataset, '../../data/data2test_g-20.pt')
+    torch.save(dataset, '../../data/data2test_ginf.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2test_g-20.pt')
+    dataset_ld = torch.load('../../data/data2test_ginf.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample

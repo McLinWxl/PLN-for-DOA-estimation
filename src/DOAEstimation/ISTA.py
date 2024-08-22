@@ -18,7 +18,7 @@ import time
 
 
 class ISTA(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, alpha=1):
         super(ISTA, self).__init__()
         self.args = args
         self.num_sensors = args.antenna_num
@@ -28,11 +28,13 @@ class ISTA(torch.nn.Module):
         self.M2 = M2
         self.num_layers = args_unfolding.num_layers
         self.device = args_unfolding.device
+        self.alpha = alpha
 
         self.relu = torch.nn.ReLU()
 
     def forward(self, paras, covariance_vector):
         """
+        :param alpha:
         :param paras:
         :param covariance_vector: (batch_size, search_numbers, M2, 1) -> (1, 9, 64, 1)
         :return:
@@ -78,7 +80,7 @@ class ISTA(torch.nn.Module):
 
         lambda_ = 0.5 * torch.max(torch.abs(torch.matmul(dictionary_band.conj().transpose(2, 3), covariance_vector)), dim=2, keepdim=True)[0].reshape(num_batch, self.args.search_numbers, 1)
 
-        theta_init_from_dictionary = lambda_ * gamma_init_from_dictionary
+        theta_init_from_dictionary = self.alpha * lambda_ * gamma_init_from_dictionary
 
         for i in range(self.num_layers):
 

@@ -22,11 +22,11 @@ def args_data_generator():
         num_snapshots=100,
         search_numbers=5,
 
-        SNR_source_min=-20,
-        SNR_source_max=-20,
+        SNR_source_min=0,
+        SNR_source_max=0,
 
-        SNR_env_min=-20,
-        SNR_env_max=-20,
+        SNR_env_min=0,
+        SNR_env_max=0,
 
         theta_min=-50,
         theta_max=50,
