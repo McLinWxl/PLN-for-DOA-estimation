@@ -203,12 +203,12 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
     model.train()
     plt.style.use(['science', 'ieee', 'grid'])
     time_start = time.time()
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=25,
-    #                                                        threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.0004,
-    #                                                        eps=1e-08)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.75, patience=25,
+                                                           threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.0001,
+                                                           eps=1e-08)
     losses = []
     loss_min = 10
-    name_file = 'L320-V0'
+    name_file = 'L12-V2'
     for epc in range(epoch):
         if epc == 10:
             print(f'Time costs for 10 epc: {time.time() - time_start} seconds')
@@ -225,9 +225,8 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
 
             covariance_matrix_samples = torch.matmul(data_samples, data_samples.conj().transpose(2, 3)) / args.num_snapshots
 
-            covariance_vector = covariance_matrix_samples.transpose(2, 3).reshape(covariance_matrix_samples.shape[0], covariance_matrix_samples.shape[1], args.antenna_num ** 2, 1)
 
-            result_mulchannels, result, result_init_all = model(args, covariance_vector)
+            result_mulchannels, result, result_init_all = model(args, covariance_matrix_samples)
 
             # print(f"Antenna distance: {spacing_sample}")
             # print(f"Center frequency: {fre_center}")
@@ -258,7 +257,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             # loss = (1-lambda_sparse) * loss_recovery + lambda_sparse * loss_sparse
             loss = torch.nn.MSELoss()(result_init_all[:,:,-1], label_all_layers[:,:,-1])
 
-            if loss.item() < loss_min:
+            if loss.item() <= loss_min:
                 with open(f'../../Test/{name_file}/Weights/weights_best.txt', 'w') as f:
                     f.write(f"Epoch: {epc}-{idx_epc}, Loss: {loss.item()}, Lr: {optimizer.param_groups[0]['lr']} , \n ,Threshold: \n{[model.theta_amp[i].item() for i in range(len(model.theta_amp))]} \n , Step size: \n {[model.gamma_amp[i].item() for i in range(len(model.gamma_amp))]}")
                 loss_min = loss.item()
@@ -292,7 +291,7 @@ def train_proposed(model, epoch, dataloader, optimizer, criterion, args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # scheduler.step(loss)
+            scheduler.step(loss)
             # print(f"Epoch: {epc}, Loss: {loss.item()}, Threshold: {model.theta.item()}, Step size: {model.gamma.item()}")
             losses.append(loss.item())
     with open(f'../../Test/{name_file}/Weights/loss.txt', 'w') as f:

@@ -174,10 +174,11 @@ def snapshot_exactor(signal, args):
     for sample in range(num_samples):
         # generate the SNR
         signal = signal_ori[int(args.frequency_sampling * args.amp_sample * 1 * np.random.uniform(0, 0.8)):]
-        SNR_source = np.random.uniform(SNR_source_min, SNR_source_max)
+        # SNR_source = np.random.uniform(SNR_source_min, SNR_source_max)
 
-        signal_noised = add_noise(signal, SNR_source)
-        signal_noised = min_max_normalize(signal_noised)
+        # signal_noised = add_noise(signal, SNR_source)
+        # signal_noised = min_max_normalize(signal_noised)
+        signal_noised = signal
         match sample:
             case 0:
                 theta = 0
@@ -201,11 +202,11 @@ def snapshot_exactor(signal, args):
         signals_delayed = signals_delayed_downsample
 
 
-        SNR_env = np.random.uniform(SNR_env_min, SNR_env_max)
+        # SNR_env = np.random.uniform(SNR_env_min, SNR_env_max)
 
         signals_delayed = np.array(signals_delayed).reshape(args.antenna_num, -1)
-        signals_delayed_noised = add_noise(signals_delayed, SNR_env)
-
+        # signals_delayed_noised = add_noise(signals_delayed, SNR_env)
+        signals_delayed_noised = signals_delayed
         # normalize the signal to [-1, 1]
         signals_delayed = (signals_delayed_noised - np.min(signals_delayed_noised)) / (np.max(signals_delayed_noised) - np.min(signals_delayed_noised))
 
@@ -240,7 +241,8 @@ def snapshot_exactor(signal, args):
                     snapshot_sample[narrow, antenna, snapshot] = frequency_components[int(frequency_components.size / 2)]
         data_samples[sample] = snapshot_sample
         label_theta[sample] = theta
-        label_SNR[sample] = [SNR_env, SNR_source]
+        # label_SNR[sample] = [SNR_env, SNR_source]
+        label_SNR[sample] = [999, 999]
         # label_SNR[sample] = [SNR_source]
 
         paras = {

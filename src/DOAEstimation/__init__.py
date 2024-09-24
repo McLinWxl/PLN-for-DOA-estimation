@@ -9,6 +9,8 @@ import argparse
 
 def args_doa():
     ARGS = argparse.Namespace(
+        num_sources = 1,
+
         frequency_center=6000,
         frequency_fault=500,  # must less than frequency_center / 10
         damping_ratio=0.1,
@@ -45,7 +47,7 @@ def args_doa():
 
 def args_unfolding_doa():
     ARGS = argparse.Namespace(
-        num_layers=500,
+        num_layers=512,
         device='cpu',
     )
     return ARGS

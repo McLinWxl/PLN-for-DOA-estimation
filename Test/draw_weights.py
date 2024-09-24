@@ -4,7 +4,7 @@
 #  Proin dapibus sapien vel ante. Aliquam erat volutpat. Pellentesque sagittis ligula eget metus.
 #  Vestibulum commodo. Ut rhoncus gravida arcu.
 
-with open('../Test/Weights/weights_best.txt', 'r') as file:
+with open('../Test/L16-V0/Weights/weights_best.txt', 'r') as file:
     data = file.readlines()
     theta = data[2]
     gamma = data[4]
@@ -13,6 +13,8 @@ with open('../Test/Weights/weights_best.txt', 'r') as file:
     theta = [(float(i)) for i in theta]
     gamma = gamma[2:-1].split(', ')
     gamma = [(float(i)) for i in gamma]
+
+    lambda_ = [theta[i]/gamma[i] for i in range(len(theta))]
 
 import matplotlib.pyplot as plt
 plt.style.use(['science', 'ieee', 'grid'])
@@ -42,6 +44,11 @@ ax2.set_ylabel("Step size")
 # plt.plot(gamma, label='Step size')
 # plt.savefig('../Test/Figures/weights.pdf')
 # plt.legend()
+plt.show()
+
+plt.figure(dpi=800)
+plt.plot(lambda_[:], label='Lambda')
+plt.legend()
 plt.show()
 
 

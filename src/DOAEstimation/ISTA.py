@@ -32,13 +32,17 @@ class ISTA(torch.nn.Module):
 
         self.relu = torch.nn.ReLU()
 
-    def forward(self, paras, covariance_vector):
+    def forward(self, paras, covariance_matrix):
         """
         :param alpha:
         :param paras:
         :param covariance_vector: (batch_size, search_numbers, M2, 1) -> (1, 9, 64, 1)
         :return:
         """
+        covariance_vector = covariance_matrix.transpose(2, 3).reshape(covariance_matrix.shape[0],
+                                                                      covariance_matrix.shape[1],
+                                                                      args.antenna_num ** 2, 1)
+
         num_batch = covariance_vector.shape[0]
         assert covariance_vector.shape[1] == self.args.search_numbers and covariance_vector.shape[2] == self.M2 and \
                covariance_vector.shape[3] == 1

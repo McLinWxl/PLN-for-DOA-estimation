@@ -16,6 +16,7 @@ from __init__ import args_doa, args_unfolding_doa
 args = args_doa()
 args_unfolding = args_unfolding_doa()
 import time
+import heapq
 
 
 class proposedMethods(torch.nn.Module):
@@ -36,19 +37,32 @@ class proposedMethods(torch.nn.Module):
         # self.theta = torch.nn.Parameter(0.17 * torch.ones(self.num_layers), requires_grad=True)
         # self.gamma = torch.nn.Parameter(0.00036 * torch.ones(self.num_layers), requires_grad=True)
 
-        self.theta_amp = torch.nn.Parameter(torch.randn(self.num_layers) / 100, requires_grad=True)
-        self.gamma_amp = torch.nn.Parameter(torch.randn(self.num_layers) / 100, requires_grad=True)
+        self.theta_amp = torch.nn.Parameter(torch.ones(self.num_layers), requires_grad=True)
+        self.gamma_amp = torch.nn.Parameter(torch.ones(self.num_layers), requires_grad=True)
 
         self.leakly_relu = torch.nn.LeakyReLU(0.01)
         self.relu = torch.nn.ReLU()
 
-    def forward(self, paras, covariance_vector):
+    def forward(self, paras, covariance_matrix):
         """
         :param paras:
         :param covariance_vector: (batch_size, search_numbers, M2, 1) -> (1, 9, 64, 1)
         :return:
         """
-        num_batch = covariance_vector.shape[0]
+        covariance_vector = covariance_matrix.transpose(2, 3).reshape(covariance_matrix.shape[0],
+                                                                              covariance_matrix.shape[1],
+                                                                              args.antenna_num ** 2, 1)
+        num_batch, num_freq, _, _ = covariance_vector.shape
+        source_power = torch.zeros((num_batch, num_freq, 1, 1))
+        # noise_power = torch.zeros((num_batch, num_freq, 1, 1))
+        for i in range(num_batch):
+            for j in range(num_freq):
+                # eigvalue = torch.abs(torch.linalg.eigvals(covariance_matrix[i, j]))
+                # largest_eigvalue = heapq.nlargest(args.antenna_num, eigvalue)
+                # source_power[i, j] = np.mean(largest_eigvalue)
+                # smallest_eigvalue = heapq.nsmallest((args.antenna_num-args.num_sources), eigvalue)
+                # noise_power[i, j] = np.mean(smallest_eigvalue)
+                source_power[i, j] = torch.abs(torch.trace(covariance_matrix[i, j])) / args.antenna_num
         assert covariance_vector.shape[1] == self.args.search_numbers and covariance_vector.shape[2] == self.M2 and \
                covariance_vector.shape[3] == 1
         # covariance_vector = covariance_vector / torch.linalg.matrix_norm(covariance_vector, ord=np.inf, dim=2, keepdim=True)
@@ -74,14 +88,22 @@ class proposedMethods(torch.nn.Module):
 
         # Forward
         result_init = torch.matmul(dictionary_band.conj().transpose(2, 3), covariance_vector).real.float()
-        # result_init = result_init / (torch.norm(result_init, dim=2) + 1e-20).reshape(-1)
-        result_init = torch.div(result_init,
-                                torch.norm(result_init, dim=2).reshape(result_init.shape[0], result_init.shape[1], 1,
-                                                                       result_init.shape[3]) + 1e-20)
+        result_init = torch.abs(result_init)
+        result_init = result_init / (
+                    torch.sum(result_init, dim=2, keepdim=True) + 1e-20)
+        result_init_normed = torch.mul(result_init, source_power)
+
+        # plt.plot(result_init[0, 0])
+        # plt.show()
+        # plt.plot(result_init_normed[0, 0])
+        # plt.title(f'{source_power[0, 0]}')
+        # plt.show()
+
+
         result_init_all = torch.zeros(result_init.shape[0], self.args.search_numbers, self.num_layers, self.num_grids,
                                       1).to(self.device)
 
-        result = result_init
+        result = result_init_normed
         identity_matrix = (torch.eye(self.num_grids) + 1j * torch.zeros([self.num_grids, self.num_grids])).to(
             self.device)
 
@@ -96,8 +118,8 @@ class proposedMethods(torch.nn.Module):
             # theta = torch.abs(self.theta[i])
             # TODO: gamma is trainable. It should be learned from the former layer.
 
-            gamma_amp = 1 + (self.gamma_amp[i])
-            theta_amp = 1 + (self.theta_amp[i])
+            gamma_amp = torch.abs((self.gamma_amp[i]))
+            theta_amp = torch.abs((self.theta_amp[i]))
 
             gamma = (gamma_amp * gamma_init_from_dictionary).reshape(num_batch, self.args.search_numbers, 1, 1)
             theta = (theta_amp * theta_init_from_dictionary).reshape(num_batch, self.args.search_numbers, 1, 1)
@@ -115,39 +137,43 @@ class proposedMethods(torch.nn.Module):
             #             torch.max(s_abs, dim=2, keepdim=True)[0] - torch.min(s_abs, dim=2, keepdim=True)[0] + 1e-20)
 
             result = self.relu(s_abs - theta)
+            result_dense = result / (
+                    torch.sum(result, dim=2, keepdim=True) + 1e-20)
+            result_dense = torch.where(torch.isnan(result_dense), torch.full_like(result_dense, 0), result_dense)
+            result = torch.mul(result_dense, source_power)
+            # result = self.relu(result - theta)
 
-            # result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
-            #             torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
+            # plt.plot(result_dense.detach().cpu().numpy()[0, 0])
+            # plt.show()
 
-            # result = result / (torch.norm(result, dim=2, keepdim=True) + 1e-20)
-            result_init_all[:, :, i] = result
+            result_init_all[:, :, i] = result_dense
         # norm every channel of result to [0, 1]
         # result = result / (torch.norm(result, dim=2) + 1e-20).reshape(result_init.shape[0], result_init.shape[1], 1, result_init.shape[3])
         # result = torch.nn.functional.softmax(result, dim=2)
-        result_ave = torch.mean(result, dim=1, keepdim=True).to(torch.float32)
+        result_ave = torch.mean(result_dense, dim=1, keepdim=True).to(torch.float32)
         # result_ave = self.combination_module(result)
 
         # normalize result_ave to [0, 1]
-        result_ave = (result_ave - torch.min(result_ave, dim=2, keepdim=True)[0]) / (
-                    torch.max(result_ave, dim=2, keepdim=True)[0] - torch.min(result_ave, dim=2, keepdim=True)[
-                0] + 1e-20)
-        result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
-                    torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
+        # result_ave = (result_ave - torch.min(result_ave, dim=2, keepdim=True)[0]) / (
+        #             torch.max(result_ave, dim=2, keepdim=True)[0] - torch.min(result_ave, dim=2, keepdim=True)[
+        #         0] + 1e-20)
+        # result = (result - torch.min(result, dim=2, keepdim=True)[0]) / (
+        #             torch.max(result, dim=2, keepdim=True)[0] - torch.min(result, dim=2, keepdim=True)[0] + 1e-20)
 
-        return result, result_ave, result_init_all
+        return result_dense, result_ave, result_init_all
 
 
 if __name__ == '__main__':
     dataset_ld = torch.load('../../data/data2train.pt')
     print(f"Dataset length: {len(dataset_ld)}")
-    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=5, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=10, shuffle=True)
 
     model = proposedMethods()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
     # criterion = torch.nn.MSELoss()
     criterion = torch.nn.MSELoss()
 
-    epoch = 30
+    epoch = 10
 
     losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion,
                             args=args)
