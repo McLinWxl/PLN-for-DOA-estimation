@@ -8,14 +8,32 @@ from TimeDomainGenerator import fault_generator
 from __init__ import args_data_generator
 from rich.progress import track
 
-
+def cal_fre(signal, fs):
+    signal = signal.reshape(-1)
+    fft_result = np.fft.fft(signal)
+    fft_freq = np.fft.fftfreq(len(fft_result), 1 / fs)
+    fft_magnitude = np.abs(fft_result) / len(signal)
+    single_sided_magnitude = fft_magnitude[:len(fft_magnitude) // 2]
+    single_sided_freq = fft_freq[:len(fft_freq) // 2]
+    return single_sided_freq, single_sided_magnitude
 
 class DatasetGeneration_sample(torch.utils.data.Dataset):
     def __init__(self, args_):
         if args_.frequency_center is not None:
-            signal = fault_generator(args_)
-            data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal, args_)
+            signal, f_c, f_f = fault_generator(args_)
+            sample_points = int(args.frequency_sampling)
 
+            self.signal_sample = signal[::args.amp_sample]
+            self.signal_sample = self.signal_sample[len( self.signal_sample) // 2: len( self.signal_sample) // 2 + sample_points]
+
+            # x_fre, y_fre = cal_fre(self.signal_sample.reshape(-1), 51200)
+            # plt.plot(x_fre, y_fre)
+            # plt.xlim(0, 10000)
+            # plt.show()
+
+            data_samples_, label_theta_, label_SNR_, paras = snapshot_exactor(signal, f_c, f_f, args_)
+            num_sample = data_samples_.shape[0]
+            self.signal_sample = np.tile(self.signal_sample, (num_sample, 1))
             self.data_samples = torch.from_numpy(data_samples_)
             # self.data_frequency = torch.from_numpy(data_frequency)
             self.label_theta = torch.from_numpy(label_theta_)
@@ -32,6 +50,7 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
             self.frequency_center = []
             self.frequency_fault = []
             self.antenna_distance = []
+            self.signal_sample = []
 
     def __getitem__(self, index):
         return (self.data_samples[index],
@@ -39,7 +58,9 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
                 self.frequency_fault[index],
                 self.antenna_distance[index],
                 self.label_theta[index],
-                self.label_SNR[index])
+                self.label_SNR[index],
+                self.signal_sample[index]
+                )
 
     def __len__(self):
         return len(self.data_samples)
@@ -49,14 +70,17 @@ def dataset_train(args):
     # fault_sets = [75, 150, 300, 600]
     # spacing_sets = [0.02, 0.03, 0.04, 0.05, 0.06]
     ##
-    # center_sets = [4250, 2125]
-    # fault_sets = [300, 600]
-    # spacing_sets = [0.04, 0.08]
+    center_sets = [4250, 2125]
+    fault_sets = [300, 600]
+    spacing_sets = [0.04, 0.08]
+    ## Test below
+    # center_sets = [8500, 2833, 1700]
+    # fault_sets = [150, 450, 750]
+    # spacing_sets = [0.02, 0.06, 0.10]
     ##
-    center_sets = [8500, 2833, 1700]
-    fault_sets = [150, 450, 750]
-    spacing_sets = [0.02, 0.06, 0.10]
-    ##
+    # center_sets = [5666]
+    # fault_sets = [68]
+    # spacing_sets = [0.03]
     # center_sets = [10000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000]
     # fault_sets = [75, 150, 225, 300, 450, 600, 800]
     # spacing_sets = [0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]
@@ -91,14 +115,14 @@ if '__main__' == __name__:
     dataset = dataset_train(args)
     print(f"Dataset length: {len(dataset)}")
     # Save dataset
-    torch.save(dataset, '../../data/data2test_ginf.pt')
+    torch.save(dataset, '../../data/data2train_type0_source1.pt')
     # Load dataset
 
-    dataset_ld = torch.load('../../data/data2test_ginf.pt')
+    dataset_ld = torch.load('../../data/data2train_type0_source1.pt')
     print(f"Dataset length: {len(dataset_ld)}")
 
     # read a sample
-    data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR = dataset_ld[211]
+    data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR, signal_sample = dataset_ld[10]
 
     args.antenna_distance = spacing_sample
     args.frequency_center = fre_center

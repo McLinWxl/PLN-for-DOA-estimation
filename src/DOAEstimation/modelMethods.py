@@ -11,6 +11,7 @@ import torch.utils.data
 from functions import DatasetGeneration_sample, cal_steer_vector, cal_covariance, plot_sample
 from __init__ import args_doa
 args = args_doa()
+import time
 
 
 def MUSIC(R, num_sources, num_sensors, frequency, spacing):
@@ -74,10 +75,11 @@ def SBL(raw_data, frequency, args, max_iteration=500, error_threshold=1e-3):
 
 
 if __name__ == '__main__':
-    dataset_ld = torch.load('../../data/data2test_-5.pt')
+    dataset_ld = torch.load('../../data/data2test_g0.pt')
+
     print(f"Dataset length: {len(dataset_ld)}")
 
-    idx_val = 410
+    idx_val = 3
     # read a sample
     data_samples, fre_center, fre_fault, spacing_sample, label_theta, label_SNR = dataset_ld[idx_val]
 
@@ -95,17 +97,20 @@ if __name__ == '__main__':
     plt.imshow(np.abs(covariance_matrix_samples[0].numpy()))
     plt.show()
 
-    method = 'SBL'
+    method = 'MUSIC'
 
     p_all = np.zeros((args.search_numbers, 121))
+    time_start = time.time()
     for i in range(p_all.shape[0]):
         frequency_sample = fre_center + (i - args.search_numbers // 2) * fre_fault
         if method.upper() == 'MUSIC':
             p_all[i] = MUSIC(covariance_matrix_samples[i], 1, 8, frequency_sample, spacing_sample).reshape(-1)
         elif method.upper() == 'SBL':
             p_all[i] = SBL(data_samples[i], frequency_sample, args).reshape(-1)
+    time_end = time.time()
+    print(f"Time cost: {time_end - time_start}")
     p_ave = np.mean(p_all, axis=0)
     thete = np.linspace(-60, 60, 121)
 
-    plot_sample(method.upper(), p_all, label_theta, thete, args)
+    plot_sample(method.upper(), p_all, label_theta, thete, label_SNR, args, save_path="../../results/plots/result.pdf")
 

@@ -77,8 +77,9 @@ class proposedMethods(torch.nn.Module):
         self.args.frequency_fault = fre_fault
 
         # make high dim dictionary, shape: (search_numbers, M2, num_grids) -> (9, 64, 121)
-        narrow_band = torch.Tensor(
-            [int(self.args.frequency_center[i] / 20) for i in range(len(self.args.frequency_center))]).to(self.device)
+        # narrow_band = torch.Tensor(
+        #     [int(self.args.frequency_center[i] / 20) for i in range(len(self.args.frequency_center))]).to(self.device)
+        narrow_band = torch.Tensor(self.args.frequency_fault)
         dictionary_band = torch.zeros((num_batch, self.args.search_numbers, self.M2, self.num_grids),
                                       dtype=torch.complex64, device=self.device)
         for bat in range(num_batch):

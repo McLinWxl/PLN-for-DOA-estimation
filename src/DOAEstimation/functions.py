@@ -134,7 +134,9 @@ class DatasetGeneration_sample(torch.utils.data.Dataset):
                 self.frequency_fault[index],
                 self.antenna_distance[index],
                 self.label_theta[index],
-                self.label_SNR[index])
+                self.label_SNR[index],
+                self.signal_sample[index]
+                )
 
     def __len__(self):
         return len(self.data_samples)
@@ -178,22 +180,24 @@ def cal_dictionary(frequency, args, idx):
         dictionary[i*args.antenna_num:(i+1)*args.antenna_num, :] = w_m
     return dictionary
 
-def plot_sample(method: str, results, label_theta, grid_theta, args, save_path=None):
+def plot_sample(method: str, results, label_theta, grid_theta, label_SNR, args, save_path=None):
     result_ave = np.mean(results, axis=0)
-    plt.style.use(['science', 'ieee', 'grid'])
-    plt.figure(dpi=800)
+    # plt.style.use(['science', 'ieee', 'grid'])
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.size"] = 12
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    plt.figure(dpi=500)
     for i in range(results.shape[0]):
-        plt.plot(grid_theta, results[i], alpha=0.3, linewidth=0.7, linestyle='-')
-    plt.plot(grid_theta, result_ave, alpha=1, linewidth=1.5, color='k', linestyle='-', label='Estimated spectrum')
+        plt.plot(grid_theta, results[i], alpha=0.5, linewidth=0.7, linestyle='-')
+    plt.plot(grid_theta, result_ave, alpha=1, linewidth=2, color='k', linestyle='-', label='Estimated spectrum')
     plt.axvline(x=label_theta[0], color='r', linestyle='--', label='Ground truth')
     plt.xlabel("DOA (°)")
     plt.ylabel("Amplitude")
-    plt.title(f"SBL Algorithm for Impulsive Signal DOA Estimation at:  \n "
-              f"1. Center frequency: {args.frequency_center} Hz,  \n "
-              f"2. Fault frequency: {args.frequency_fault} Hz,  \n "
-              f"3. Antenna distance: {args.antenna_distance} meters, \n ")
-              # f"4. SNR of environment, SNR of source: {np.array(label_SNR)} dB")
-    plt.legend(fontsize=8)
+    plt.title(f"Center/Fault frequency: {args.frequency_center}/{args.frequency_fault} Hz~{args.antenna_distance}meters \n"
+              f"SNR of source/environment: {np.array(label_SNR)} dB")
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.8)
     if save_path is not None:
         plt.savefig(save_path)
     plt.show()

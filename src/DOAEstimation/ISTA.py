@@ -132,24 +132,24 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(dataset_ld, batch_size=50, shuffle=True)
 
     model = ISTA()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    # # criterion = torch.nn.MSELoss()
     # criterion = torch.nn.MSELoss()
-    criterion = torch.nn.MSELoss()
-
-    epoch = 8
-
-    losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion,
-                            args=args)
-    # save losses as csv file
-    np.savetxt('../../Test/losses.csv', losses, delimiter=',')
-
-    plt.style.use(['science', 'ieee', 'grid'])
-    plt.figure(dpi=800)
-    plt.plot(losses)
-    plt.xlabel('Batch')
-    plt.ylabel('Loss')
-    plt.title('Training Loss')
-    plt.savefig('../../Test/Figures/TrainingLoss.pdf')
-    plt.show()
+    #
+    # epoch = 8
+    #
+    # losses = train_proposed(model=model, epoch=epoch, dataloader=train_loader, optimizer=optimizer, criterion=criterion,
+    #                         args=args)
+    # # save losses as csv file
+    # np.savetxt('../../Test/losses.csv', losses, delimiter=',')
+    #
+    # plt.style.use(['science', 'ieee', 'grid'])
+    # plt.figure(dpi=800)
+    # plt.plot(losses)
+    # plt.xlabel('Batch')
+    # plt.ylabel('Loss')
+    # plt.title('Training Loss')
+    # plt.savefig('../../Test/Figures/TrainingLoss.pdf')
+    # plt.show()
 
     # read a sample
